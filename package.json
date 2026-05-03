@@ -1,0 +1,59 @@
+{
+  "name": "hyperd-mcp",
+  "version": "0.6.1",
+  "description": "MCP server for hyperD x402 paid APIs — 12 paid endpoints (DeFi yield, wallet risk, contract audit, governance summarize, sentiment, etc) accessible from Claude Desktop / Cursor / Cline / Zed via stdio transport. Pay per call in USDC on Base.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "x402",
+    "claude",
+    "cursor",
+    "cline",
+    "ai-agents",
+    "defi",
+    "base",
+    "usdc",
+    "paid-apis",
+    "agent-tools"
+  ],
+  "license": "MIT",
+  "author": "the-thomas-code",
+  "homepage": "https://github.com/the-thomas-code/hyperd-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/the-thomas-code/hyperd-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/the-thomas-code/hyperd-mcp/issues"
+  },
+  "type": "commonjs",
+  "main": "dist/server.js",
+  "bin": {
+    "hyperd-mcp": "dist/server.js"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc && chmod +x dist/server.js",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "@x402/core": "^2.6.0",
+    "@x402/evm": "^2.6.0",
+    "viem": "^2.21.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

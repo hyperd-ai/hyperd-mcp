@@ -1,0 +1,822 @@
+{
+  "manifest_version": "0.2",
+  "name": "hyperd-mcp",
+  "display_name": "hyperD x402 APIs",
+  "version": "0.6.1",
+  "description": "12 paid x402 endpoints for AI agents — DeFi yield, wallet risk, contract audit, governance summarize, sentiment, more. Pay per call in USDC on Base.",
+  "long_description": "MCP server exposing the hyperD x402 paid API catalog (api.hyperd.ai) as MCP tools accessible from Claude Desktop, Cursor, Cline, and Zed. Each tool call signs an EIP-3009 USDC payment authorization with the user's wallet, settles on Base mainnet via Coinbase's CDP facilitator (~2 seconds), and returns the data. No accounts, no API keys, $0.005-$0.10 USDC per call.\n\nIncludes: balance lookup, DeFi yield recommendations (DefiLlama-backed), token security scoring (GoPlus), wallet risk + sanctions (Chainalysis Oracle), DEX quote aggregation (Paraswap + 0x), wallet behavioral classification, pre-trade contract audit, DAO proposal LLM summarization, Farcaster sentiment, and more.",
+  "author": {
+    "name": "the-thomas-code",
+    "url": "https://api.hyperd.ai"
+  },
+  "homepage": "https://api.hyperd.ai",
+  "documentation": "https://www.npmjs.com/package/hyperd-mcp",
+  "support": "https://github.com/the-thomas-code/hyperd-mcp/issues",
+  "icon": "https://api.hyperd.ai/favicon.ico",
+  "keywords": [
+    "x402",
+    "defi",
+    "base",
+    "usdc",
+    "paid-apis",
+    "ai-agents",
+    "claude",
+    "agent-tools"
+  ],
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/server.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/server.js"
+      ],
+      "env": {
+        "HYPERD_WALLET_PRIVATE_KEY": "${user_config.wallet_private_key}",
+        "HYPERD_API_BASE": "${user_config.api_base}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "hyperd_get_balance",
+      "description": "Get the on-chain balance for an EVM wallet address. Multi-chain (Base, Ethereum, Polygon, Arbitrum). Supports ERC-20 by symbol or contract address. Pass chain='all' for parallel multi-chain lookup. Costs $0.01 in USDC on Base.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "0x EVM wallet address"
+          },
+          "token": {
+            "type": "string",
+            "description": "Token symbol (e.g., USDC, WETH) or contract address. Default USDC."
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "base",
+              "ethereum",
+              "polygon",
+              "arbitrum",
+              "base-sepolia",
+              "all"
+            ],
+            "description": "Chain. Default 'base'. Use 'all' for parallel multi-chain."
+          }
+        },
+        "required": [
+          "address"
+        ]
+      },
+      "annotations": {
+        "title": "Wallet Balance",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "balance": {
+            "type": "string",
+            "description": "Balance as a decimal string"
+          },
+          "raw": {
+            "type": "string",
+            "description": "Raw balance in smallest units"
+          },
+          "decimals": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd_get_yield",
+      "description": "Get an opinionated DeFi yield recommendation. Filters DefiLlama's pool universe by risk tier (low/medium/high), TVL, and IL exposure, then ranks by APY. Returns the top picks plus projected $ yield over your duration. Costs $0.05 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "USD amount to invest"
+          },
+          "risk": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "description": "Risk tolerance"
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Investment duration in days. Default 30."
+          },
+          "chain": {
+            "type": "string",
+            "description": "Optional chain filter (e.g., 'base')"
+          },
+          "stables": {
+            "type": "boolean",
+            "description": "Stablecoins-only filter. Default false (true for low risk)."
+          }
+        },
+        "required": [
+          "amount",
+          "risk"
+        ]
+      },
+      "annotations": {
+        "title": "DeFi Yield Recommendation",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "risk": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "integer"
+          },
+          "top": {
+            "type": "array",
+            "description": "Top yield picks ranked by APY",
+            "items": {
+              "type": "object",
+              "properties": {
+                "project": {
+                  "type": "string"
+                },
+                "chain": {
+                  "type": "string"
+                },
+                "symbol": {
+                  "type": "string"
+                },
+                "apy": {
+                  "type": "number"
+                },
+                "tvlUsd": {
+                  "type": "number"
+                },
+                "projectedYieldUsd": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd_get_token_info",
+      "description": "Get aggregated token metadata: market cap, supply, contract addresses across chains, recent volume. One call replaces multiple CoinGecko / Etherscan / DefiLlama lookups. Costs $0.01 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Symbol, name, or coingecko id (e.g., 'USDC' or 'usd-coin')"
+          },
+          "contract": {
+            "type": "string",
+            "description": "Contract address (alternative to query)"
+          },
+          "chain": {
+            "type": "string",
+            "description": "Chain when using contract. Default 'base'."
+          }
+        }
+      },
+      "annotations": {
+        "title": "Token Metadata",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "marketCapUsd": {
+            "type": "number"
+          },
+          "priceUsd": {
+            "type": "number"
+          },
+          "volume24hUsd": {
+            "type": "number"
+          },
+          "contracts": {
+            "type": "object",
+            "description": "Map of chain -> contract address"
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd_check_token_security",
+      "description": "Get a token's security risk score (0-100). Ensemble of GoPlus signals: honeypot detection, owner permissions, holder concentration, buy/sell taxes, source verification. Returns score, band (safe/caution/warning/danger), and structured findings. Costs $0.05 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "contract": {
+            "type": "string",
+            "description": "Token contract address"
+          },
+          "chain": {
+            "type": "string",
+            "description": "Chain. Default 'base'."
+          }
+        },
+        "required": [
+          "contract"
+        ]
+      },
+      "annotations": {
+        "title": "Token Security Score",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "contract": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer",
+            "description": "0-100, higher = safer"
+          },
+          "band": {
+            "type": "string",
+            "enum": [
+              "safe",
+              "caution",
+              "warning",
+              "danger"
+            ]
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd_check_wallet_risk",
+      "description": "Check a wallet's risk profile. Combines Chainalysis Sanctions Oracle (OFAC SDN authoritative) with GoPlus address heuristics (mixers, phishing, scams). Returns sanctioned flag + 0-100 heuristic score. Costs $0.10 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "0x EVM wallet address"
+          },
+          "chain": {
+            "type": "string",
+            "description": "Chain. Default 'base'."
+          },
+          "deep": {
+            "type": "boolean",
+            "description": "Cross-check across multiple chains. Default false."
+          }
+        },
+        "required": [
+          "address"
+        ]
+      },
+      "annotations": {
+        "title": "Wallet Risk + Sanctions",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "sanctioned": {
+            "type": "boolean"
+          },
+          "score": {
+            "type": "integer",
+            "description": "0-100, higher = riskier"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd_get_protocol_tvl",
+      "description": "Get a DeFi protocol's TVL, audits, chain distribution from DefiLlama. Pass slug for detail (e.g., 'aave', 'morpho-blue') or list=true for top 50. Costs $0.01 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "description": "Protocol slug, e.g., 'aave' or 'morpho-blue'"
+          },
+          "list": {
+            "type": "boolean",
+            "description": "If true, returns top 50 protocols by TVL"
+          }
+        }
+      },
+      "annotations": {
+        "title": "Protocol TVL",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tvlUsd": {
+            "type": "number"
+          },
+          "audits": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "chainTvls": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd_estimate_gas",
+      "description": "Get current gas price + base fee + tip percentiles for fast/standard/slow inclusion. Costs $0.005 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "base",
+              "ethereum",
+              "polygon",
+              "arbitrum",
+              "base-sepolia"
+            ],
+            "description": "Chain. Default 'base'."
+          }
+        }
+      },
+      "annotations": {
+        "title": "Gas Price Oracle",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string"
+          },
+          "baseFeeGwei": {
+            "type": "number"
+          },
+          "fast": {
+            "type": "object",
+            "properties": {
+              "gwei": {
+                "type": "number"
+              },
+              "tipGwei": {
+                "type": "number"
+              }
+            }
+          },
+          "standard": {
+            "type": "object",
+            "properties": {
+              "gwei": {
+                "type": "number"
+              },
+              "tipGwei": {
+                "type": "number"
+              }
+            }
+          },
+          "slow": {
+            "type": "object",
+            "properties": {
+              "gwei": {
+                "type": "number"
+              },
+              "tipGwei": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd_get_dex_quote",
+      "description": "Get the best DEX swap route across multiple aggregators (Paraswap + 0x). Returns the highest output amount and per-source quotes. Costs $0.02 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Source token symbol or contract address"
+          },
+          "to": {
+            "type": "string",
+            "description": "Destination token symbol or contract address"
+          },
+          "amount": {
+            "type": "string",
+            "description": "Decimal amount of source token"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "base",
+              "ethereum",
+              "polygon",
+              "arbitrum"
+            ],
+            "description": "Chain. Default 'base'."
+          },
+          "slippage": {
+            "type": "integer",
+            "description": "Max slippage in basis points. Default 50."
+          },
+          "taker": {
+            "type": "string",
+            "description": "Optional payer address for 0x quote (improves accuracy)"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "amount"
+        ]
+      },
+      "annotations": {
+        "title": "DEX Swap Quote",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "amountIn": {
+            "type": "string"
+          },
+          "best": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "amountOut": {
+                "type": "string"
+              },
+              "priceImpactBps": {
+                "type": "integer"
+              }
+            }
+          },
+          "quotes": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd_classify_wallet",
+      "description": "Classify a wallet's persona based on on-chain behavior. Returns one of: Trader, HODLer, MEV-bot, Whale, Smart-Money, Airdrop-Farmer, Compromised, Inactive — plus confidence and supporting signals. Costs $0.10 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "0x EVM wallet address"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "base",
+              "ethereum",
+              "polygon",
+              "arbitrum"
+            ],
+            "description": "Chain to analyze. Default 'base'."
+          }
+        },
+        "required": [
+          "address"
+        ]
+      },
+      "annotations": {
+        "title": "Wallet Behavioral Persona",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "persona": {
+            "type": "string",
+            "enum": [
+              "Trader",
+              "HODLer",
+              "MEV-bot",
+              "Whale",
+              "Smart-Money",
+              "Airdrop-Farmer",
+              "Compromised",
+              "Inactive"
+            ]
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "signals": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd_audit_contract",
+      "description": "Pre-trade contract security audit. Composes GoPlus + Sourcify + DefiLlama protocol recognition + on-chain heuristics into a single 0-100 risk score with structured findings. Use BEFORE interacting with any unfamiliar contract. Costs $0.10 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "contract": {
+            "type": "string",
+            "description": "Contract address to audit"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "base",
+              "ethereum",
+              "polygon",
+              "arbitrum"
+            ],
+            "description": "Chain. Default 'base'."
+          }
+        },
+        "required": [
+          "contract"
+        ]
+      },
+      "annotations": {
+        "title": "Contract Security Audit",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "contract": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer",
+            "description": "0-100, higher = riskier"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "sources": {
+            "type": "object",
+            "description": "Per-source signals (goplus, sourcify, defillama)"
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd_summarize_governance",
+      "description": "Summarize a DAO governance proposal (Snapshot or Tally URL). Returns structured impact analysis: who benefits, who pays, recommended position. LLM-summarized. Costs $0.10 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "proposal_url": {
+            "type": "string",
+            "description": "Snapshot or Tally proposal URL"
+          }
+        },
+        "required": [
+          "proposal_url"
+        ]
+      },
+      "annotations": {
+        "title": "DAO Proposal Summary",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "proposal": {
+            "type": "object"
+          },
+          "summary": {
+            "type": "string",
+            "description": "LLM-generated impact summary"
+          },
+          "whoBenefits": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "whoPays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recommendation": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd_get_token_sentiment",
+      "description": "Get a token's sentiment score (0-100) from recent Farcaster discussion. Returns score, band (very_negative to very_positive), volume, trend, sample casts. Costs $0.05 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Token symbol or name"
+          },
+          "window": {
+            "type": "string",
+            "description": "Days (1-30) or \"24h\" / \"7d\". Default \"24h\"."
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "annotations": {
+        "title": "Token Sentiment",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "window": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer",
+            "description": "0-100, 50 is neutral"
+          },
+          "band": {
+            "type": "string",
+            "enum": [
+              "very_negative",
+              "negative",
+              "neutral",
+              "positive",
+              "very_positive"
+            ]
+          },
+          "volume": {
+            "type": "integer"
+          },
+          "trend": {
+            "type": "string"
+          },
+          "sampleCasts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "user_config": {
+    "wallet_private_key": {
+      "type": "string",
+      "title": "Wallet Private Key (hex, 0x-prefixed)",
+      "description": "EVM private key for the wallet that pays for x402 calls. Use a HOT WALLET with limited funds — recommend $5-$20 USDC on Base. The wallet's balance is the spending limit.",
+      "sensitive": true,
+      "required": true
+    },
+    "api_base": {
+      "type": "string",
+      "title": "API base URL",
+      "description": "Override the API base. Defaults to https://api.hyperd.ai",
+      "default": "https://api.hyperd.ai",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": [
+      "darwin",
+      "linux",
+      "win32"
+    ],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}
