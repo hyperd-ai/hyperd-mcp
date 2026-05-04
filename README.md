@@ -72,7 +72,7 @@ For the full MCP client list and per-client config docs see https://modelcontext
 ## Local-development install (clone instead of npm)
 
 ```bash
-git clone https://github.com/the-thomas-code/hyperd-mcp.git
+git clone https://github.com/hyperd-ai/hyperd-mcp.git
 cd hyperd-mcp
 npm install
 npm run build

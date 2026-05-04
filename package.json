@@ -1,6 +1,6 @@
 {
   "name": "hyperd-mcp",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "MCP server for hyperD x402 paid APIs — 12 paid endpoints (DeFi yield, wallet risk, contract audit, governance summarize, sentiment, etc) accessible from Claude Desktop / Cursor / Cline / Zed via stdio transport. Pay per call in USDC on Base.",
   "keywords": [
     "mcp",
@@ -18,13 +18,13 @@
   ],
   "license": "MIT",
   "author": "the-thomas-code",
-  "homepage": "https://github.com/the-thomas-code/hyperd-mcp#readme",
+  "homepage": "https://github.com/hyperd-ai/hyperd-mcp#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/the-thomas-code/hyperd-mcp.git"
+    "url": "git+https://github.com/hyperd-ai/hyperd-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/the-thomas-code/hyperd-mcp/issues"
+    "url": "https://github.com/hyperd-ai/hyperd-mcp/issues"
   },
   "type": "commonjs",
   "main": "dist/server.js",

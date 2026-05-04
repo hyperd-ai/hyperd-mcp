@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "hyperd-mcp",
   "display_name": "hyperD x402 APIs",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "12 paid x402 endpoints for AI agents — DeFi yield, wallet risk, contract audit, governance summarize, sentiment, more. Pay per call in USDC on Base.",
   "long_description": "MCP server exposing the hyperD x402 paid API catalog (api.hyperd.ai) as MCP tools accessible from Claude Desktop, Cursor, Cline, and Zed. Each tool call signs an EIP-3009 USDC payment authorization with the user's wallet, settles on Base mainnet via Coinbase's CDP facilitator (~2 seconds), and returns the data. No accounts, no API keys, $0.005-$0.10 USDC per call.\n\nIncludes: balance lookup, DeFi yield recommendations (DefiLlama-backed), token security scoring (GoPlus), wallet risk + sanctions (Chainalysis Oracle), DEX quote aggregation (Paraswap + 0x), wallet behavioral classification, pre-trade contract audit, DAO proposal LLM summarization, Farcaster sentiment, and more.",
   "author": {
@@ -11,7 +11,7 @@
   },
   "homepage": "https://api.hyperd.ai",
   "documentation": "https://www.npmjs.com/package/hyperd-mcp",
-  "support": "https://github.com/the-thomas-code/hyperd-mcp/issues",
+  "support": "https://github.com/hyperd-ai/hyperd-mcp/issues",
   "icon": "https://api.hyperd.ai/favicon.ico",
   "keywords": [
     "x402",
