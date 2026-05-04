@@ -319,7 +319,7 @@ server.tool(
 // hyperd.liquidation.risk — cross-protocol lending liquidation health ($0.10)
 server.tool(
   "hyperd.liquidation.risk",
-  "Cross-protocol liquidation risk for a wallet's lending positions. Returns health factor, USD-at-risk, and action recommendations across Aave V3 (Compound v3, Spark Lend, Morpho Blue coming soon). Pass chain='all' for cross-chain aggregate. Costs $0.10 in USDC.",
+  "Cross-protocol liquidation risk for a wallet's lending positions. Health factor, USD-at-risk, and recommendations across Aave V3, Compound v3, Spark Lend, and Morpho Blue. Pass chain='all' for cross-chain aggregate. Costs $0.10 in USDC.",
   {
     address: z.string().describe("0x EVM wallet address"),
     chain: z

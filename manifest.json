@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "hyperd-mcp",
   "display_name": "hyperD x402 APIs",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "15 paid x402 endpoints + 3 free tools for AI agents — DeFi yield, wallet risk, contract audit, governance summaries, sentiment, liquidation alerts, wallet anomaly detection. Pay per call in USDC on Base.",
   "long_description": "MCP server exposing the hyperD x402 paid API catalog (api.hyperd.ai) as MCP tools accessible from Claude Desktop, Cursor, Cline, and Zed. Each tool call signs an EIP-3009 USDC payment authorization with the user's wallet, settles on Base mainnet via Coinbase's CDP facilitator (~2 seconds), and returns the data. No accounts, no API keys, $0.005-$0.10 USDC per call.\n\nIncludes: balance lookup, DeFi yield recommendations (DefiLlama-backed), token security scoring (GoPlus), wallet risk + sanctions (Chainalysis Oracle), DEX quote aggregation (Paraswap + 0x), wallet behavioral classification, pre-trade contract audit, DAO proposal LLM summarization, Farcaster sentiment, and more.",
   "author": {
@@ -899,7 +899,7 @@
     },
     {
       "name": "hyperd.liquidation.risk",
-      "description": "Cross-protocol liquidation risk for a wallet's lending positions. Returns health factor, USD-at-risk, action recommendations across Aave V3 (Compound v3, Spark Lend, Morpho Blue coming soon). Pass chain='all' for cross-chain aggregate. Costs $0.10 in USDC.",
+      "description": "Cross-protocol liquidation risk for a wallet's lending positions. Health factor, USD-at-risk, and recommendations across Aave V3, Compound v3, Spark Lend, and Morpho Blue. Pass chain='all' for cross-chain aggregate. Costs $0.10 in USDC.",
       "inputSchema": {
         "type": "object",
         "properties": {
