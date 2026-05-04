@@ -163,7 +163,7 @@ server.tool(
     address: z.string().describe("0x EVM wallet address"),
     token: z.string().optional().describe("Token symbol (e.g., USDC, WETH) or contract address. Default USDC."),
     chain: z
-      .enum(["base", "ethereum", "polygon", "arbitrum", "base-sepolia", "all"])
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb", "base-sepolia", "all"])
       .optional()
       .describe("Chain. Default 'base'. Use 'all' for parallel multi-chain."),
   },
@@ -245,7 +245,7 @@ server.tool(
   "Get current gas price + base fee + tip percentiles for fast/standard/slow inclusion. Costs $0.005 in USDC.",
   {
     chain: z
-      .enum(["base", "ethereum", "polygon", "arbitrum", "base-sepolia"])
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb", "base-sepolia"])
       .optional()
       .describe("Chain. Default 'base'."),
   },
@@ -260,7 +260,7 @@ server.tool(
     from: z.string().describe("Source token symbol or contract address"),
     to: z.string().describe("Destination token symbol or contract address"),
     amount: z.string().describe("Decimal amount of source token"),
-    chain: z.enum(["base", "ethereum", "polygon", "arbitrum"]).optional().describe("Chain. Default 'base'."),
+    chain: z.enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"]).optional().describe("Chain. Default 'base'."),
     slippage: z.number().int().optional().describe("Max slippage in basis points. Default 50."),
     taker: z.string().optional().describe("Optional payer address for 0x quote (improves accuracy)"),
   },
@@ -274,7 +274,7 @@ server.tool(
   {
     address: z.string().describe("0x EVM wallet address"),
     chain: z
-      .enum(["base", "ethereum", "polygon", "arbitrum"])
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"])
       .optional()
       .describe("Chain to analyze. Default 'base'."),
   },
@@ -288,7 +288,7 @@ server.tool(
   {
     contract: z.string().describe("Contract address to audit"),
     chain: z
-      .enum(["base", "ethereum", "polygon", "arbitrum"])
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"])
       .optional()
       .describe("Chain. Default 'base'."),
   },
@@ -323,7 +323,7 @@ server.tool(
   {
     address: z.string().describe("0x EVM wallet address"),
     chain: z
-      .enum(["base", "ethereum", "polygon", "arbitrum", "all"])
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb", "all"])
       .optional()
       .describe("Chain to check, or 'all' for cross-chain aggregate. Default 'base'."),
   },
@@ -337,7 +337,7 @@ server.tool(
   {
     address: z.string().describe("0x EVM wallet address"),
     chain: z
-      .enum(["base", "ethereum", "polygon", "arbitrum"])
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"])
       .optional()
       .describe("Chain to analyze. Default 'base'."),
     window: z
