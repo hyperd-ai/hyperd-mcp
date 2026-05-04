@@ -1,6 +1,6 @@
 {
   "name": "hyperd-mcp",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "MCP server for hyperD x402 paid APIs — 12 paid endpoints (DeFi yield, wallet risk, contract audit, governance summarize, sentiment, etc) accessible from Claude Desktop / Cursor / Cline / Zed via stdio transport. Pay per call in USDC on Base.",
   "keywords": [
     "mcp",

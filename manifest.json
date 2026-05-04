@@ -2,8 +2,8 @@
   "manifest_version": "0.2",
   "name": "hyperd-mcp",
   "display_name": "hyperD x402 APIs",
-  "version": "0.7.1",
-  "description": "12 paid x402 endpoints for AI agents — DeFi yield, wallet risk, contract audit, governance summarize, sentiment, more. Pay per call in USDC on Base.",
+  "version": "0.8.0",
+  "description": "15 paid x402 endpoints + 3 free tools for AI agents — DeFi yield, wallet risk, contract audit, governance summaries, sentiment, liquidation alerts, wallet anomaly detection. Pay per call in USDC on Base.",
   "long_description": "MCP server exposing the hyperD x402 paid API catalog (api.hyperd.ai) as MCP tools accessible from Claude Desktop, Cursor, Cline, and Zed. Each tool call signs an EIP-3009 USDC payment authorization with the user's wallet, settles on Base mainnet via Coinbase's CDP facilitator (~2 seconds), and returns the data. No accounts, no API keys, $0.005-$0.10 USDC per call.\n\nIncludes: balance lookup, DeFi yield recommendations (DefiLlama-backed), token security scoring (GoPlus), wallet risk + sanctions (Chainalysis Oracle), DEX quote aggregation (Paraswap + 0x), wallet behavioral classification, pre-trade contract audit, DAO proposal LLM summarization, Farcaster sentiment, and more.",
   "author": {
     "name": "the-thomas-code",
@@ -892,6 +892,178 @@
             "type": "array",
             "items": {
               "type": "object"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd.liquidation.risk",
+      "description": "Cross-protocol liquidation risk for a wallet's lending positions. Returns health factor, USD-at-risk, action recommendations across Aave V3 (Compound v3, Spark Lend, Morpho Blue coming soon). Pass chain='all' for cross-chain aggregate. Costs $0.10 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "0x EVM wallet address"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "base",
+              "ethereum",
+              "polygon",
+              "arbitrum",
+              "all"
+            ],
+            "description": "Chain to check, or 'all' for cross-chain aggregate. Default 'base'."
+          }
+        },
+        "required": [
+          "address"
+        ]
+      },
+      "annotations": {
+        "title": "Liquidation Risk",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
+          "chainsChecked": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "positions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "totalCollateralUsd": {
+            "type": "number"
+          },
+          "totalDebtUsd": {
+            "type": "number"
+          },
+          "totalAtRiskUsd": {
+            "type": "number"
+          },
+          "compositeRiskScore": {
+            "type": "integer",
+            "description": "0-100, higher = closer to liquidation"
+          },
+          "compositeBand": {
+            "type": "string",
+            "enum": [
+              "no_position",
+              "safe",
+              "caution",
+              "warning",
+              "critical"
+            ]
+          },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "protocolsCovered": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "hyperd.wallet.anomaly",
+      "description": "Wallet behavioral anomaly detection. Compares recent activity against the wallet's own 180-day baseline — surfaces tx-volume spikes, dormant-wakeup patterns, new-protocol interactions, counterparty diversification. Catches compromised hot wallets, dormant whales, MEV-bot strategy shifts. Costs $0.10 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "0x EVM wallet address"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "base",
+              "ethereum",
+              "polygon",
+              "arbitrum"
+            ],
+            "description": "Chain to analyze. Default 'base'."
+          },
+          "window": {
+            "type": "string",
+            "description": "Recent activity window. \"24h\", \"7d\", \"30d\", or bare integer days. Default \"24h\"."
+          }
+        },
+        "required": [
+          "address"
+        ]
+      },
+      "annotations": {
+        "title": "Wallet Anomaly",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "anomalyScore": {
+            "type": "integer",
+            "description": "0-100, higher = more anomalous"
+          },
+          "band": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "unusual",
+              "suspicious",
+              "critical",
+              "baseline_unavailable"
+            ]
+          },
+          "baseline": {
+            "type": "object"
+          },
+          "current": {
+            "type": "object"
+          },
+          "anomalies": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "possibleCauses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "actionRecommendations": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }

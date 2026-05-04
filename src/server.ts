@@ -316,6 +316,38 @@ server.tool(
   async (args) => asText(await paidGet("/api/sentiment/token", args)),
 );
 
+// hyperd.liquidation.risk — cross-protocol lending liquidation health ($0.10)
+server.tool(
+  "hyperd.liquidation.risk",
+  "Cross-protocol liquidation risk for a wallet's lending positions. Returns health factor, USD-at-risk, and action recommendations across Aave V3 (Compound v3, Spark Lend, Morpho Blue coming soon). Pass chain='all' for cross-chain aggregate. Costs $0.10 in USDC.",
+  {
+    address: z.string().describe("0x EVM wallet address"),
+    chain: z
+      .enum(["base", "ethereum", "polygon", "arbitrum", "all"])
+      .optional()
+      .describe("Chain to check, or 'all' for cross-chain aggregate. Default 'base'."),
+  },
+  async (args) => asText(await paidGet("/api/liquidation/risk", args)),
+);
+
+// hyperd.wallet.anomaly — behavioral anomaly detection ($0.10)
+server.tool(
+  "hyperd.wallet.anomaly",
+  "Wallet behavioral anomaly detection. Compares recent activity against the wallet's own 180-day baseline — surfaces tx-volume spikes, dormant-wakeup patterns, new-protocol interactions, counterparty diversification. Catches compromised hot wallets, dormant whales, MEV-bot strategy shifts. Costs $0.10 in USDC.",
+  {
+    address: z.string().describe("0x EVM wallet address"),
+    chain: z
+      .enum(["base", "ethereum", "polygon", "arbitrum"])
+      .optional()
+      .describe("Chain to analyze. Default 'base'."),
+    window: z
+      .string()
+      .optional()
+      .describe('Recent activity window. "24h", "7d", "30d", or bare integer days. Default "24h".'),
+  },
+  async (args) => asText(await paidGet("/api/wallet/anomaly", args)),
+);
+
 // ────────────────────────────────────────────────────────────────────────
 // Boot
 // ────────────────────────────────────────────────────────────────────────
