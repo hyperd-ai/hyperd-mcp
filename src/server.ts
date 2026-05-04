@@ -1,16 +1,13 @@
 #!/usr/bin/env node
 /**
- * hyperD MCP Server — exposes the 12 hyperD x402 API endpoints as MCP tools.
+ * hyperD MCP Server — exposes the hyperD x402 API endpoints as MCP tools.
  *
  * Runs locally (typically launched by Claude Desktop / Cursor / Cline / Zed
- * via stdio transport). When a tool is called, this server makes the
- * corresponding paid HTTP request to api.hyperd.ai using the user's wallet,
- * pays via x402 (USDC on Base), and returns the data.
+ * via stdio transport). Free tools (catalog, pricing, health) work with no
+ * configuration. Paid tools require a wallet env var; each call signs an
+ * x402 USDC payment on Base.
  *
- * The MCP client (Claude / Cursor / etc) doesn't need to know about wallets
- * or payments — it just calls a tool and gets a result.
- *
- * Required env (one of):
+ * Optional env (only required for PAID tools):
  *   HYPERD_WALLET_PRIVATE_KEY=0x...                 (raw EVM private key, preferred)
  *   HYPERD_WALLET_MNEMONIC="word1 word2 ... word12" (BIP-39, derives at default ETH path)
  *
@@ -18,7 +15,7 @@
  *   HYPERD_PRIVATE_KEY                              (alias of HYPERD_WALLET_PRIVATE_KEY)
  *   HYPERD_MNEMONIC                                 (alias of HYPERD_WALLET_MNEMONIC)
  *
- * Optional env:
+ * Other optional env:
  *   HYPERD_API_BASE   default https://api.hyperd.ai
  *   HYPERD_BASE_RPC   default https://mainnet.base.org
  */
@@ -42,9 +39,9 @@ const RAW = (
 const API_BASE = process.env.HYPERD_API_BASE || "https://api.hyperd.ai";
 const RPC_URL = process.env.HYPERD_BASE_RPC || "https://mainnet.base.org";
 
-// Lazy-initialized payment plumbing — boots without a wallet so registries
-// (Smithery, Lobehub, etc.) can introspect tool metadata. Tool *calls* without
-// a wallet return a clear error pointing the user to set HYPERD_PRIVATE_KEY.
+// Lazy-initialized payment plumbing — boots without a wallet so the free
+// catalog/pricing/health tools work immediately and registries can introspect
+// metadata. Paid tool calls without a wallet return a clear error.
 let httpClient: x402HTTPClient | null = null;
 let payerAddress: string | null = null;
 
@@ -64,15 +61,31 @@ if (RAW) {
   payerAddress = account.address;
 }
 
+async function freeGet(
+  path: string,
+  query: Record<string, string | number | boolean | undefined> = {},
+): Promise<unknown> {
+  const url = new URL(`${API_BASE}${path}`);
+  for (const [k, v] of Object.entries(query)) {
+    if (v !== undefined && v !== "" && v !== null) url.searchParams.set(k, String(v));
+  }
+  const r = await fetch(url);
+  if (!r.ok) {
+    throw new Error(`HTTP ${r.status} on free request: ${await r.text()}`);
+  }
+  return r.json();
+}
+
 async function paidGet(
   path: string,
   query: Record<string, string | number | boolean | undefined>,
 ): Promise<unknown> {
   if (!httpClient) {
     throw new Error(
-      "Wallet not configured. Set HYPERD_WALLET_PRIVATE_KEY (raw 0x hex) OR " +
-        "HYPERD_WALLET_MNEMONIC (12/24 BIP-39 words) in this MCP server's env. " +
-        "Wallet must hold a few cents of USDC on Base.",
+      "Wallet not configured — this is a paid tool. Set HYPERD_WALLET_PRIVATE_KEY (raw 0x hex) " +
+        "OR HYPERD_WALLET_MNEMONIC (12/24 BIP-39 words) in this MCP server's env. Wallet must " +
+        "hold a few cents of USDC on Base. Free tools (hyperd.catalog.list, hyperd.pricing.get, " +
+        "hyperd.health.check) work without a wallet.",
     );
   }
 
@@ -110,11 +123,41 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
-// ────────────────────────────────────────────────────────────────────────
-// 1. balance — multi-chain ERC-20 + native balance ($0.01)
-// ────────────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════
+//                   FREE TOOLS — work without a wallet
+// ════════════════════════════════════════════════════════════════════════
+
+// hyperd.catalog.list — list all hyperD endpoints (free)
 server.tool(
-  "hyperd_get_balance",
+  "hyperd.catalog.list",
+  "List all available hyperD x402 API endpoints with their prices, descriptions, and example responses. FREE — no wallet required. Use this to discover what tools are available before configuring a wallet.",
+  {},
+  async () => asText(await freeGet("/api/discover")),
+);
+
+// hyperd.pricing.get — machine-readable price list (free)
+server.tool(
+  "hyperd.pricing.get",
+  "Get the current price list for all hyperD paid endpoints (in USDC on Base). FREE — no wallet required.",
+  {},
+  async () => asText(await freeGet("/api/pricing")),
+);
+
+// hyperd.health.check — service liveness (free)
+server.tool(
+  "hyperd.health.check",
+  "Check the health of the hyperD API: which network it's on, whether the payment facilitator is configured, which optional backend keys are wired, and cache stats. FREE — no wallet required.",
+  {},
+  async () => asText(await freeGet("/api/health")),
+);
+
+// ════════════════════════════════════════════════════════════════════════
+//                  PAID TOOLS — require a wallet env var
+// ════════════════════════════════════════════════════════════════════════
+
+// hyperd.balance.get — multi-chain ERC-20 + native balance ($0.01)
+server.tool(
+  "hyperd.balance.get",
   "Get the on-chain balance for an EVM wallet address. Multi-chain (Base, Ethereum, Polygon, Arbitrum). Supports ERC-20 by symbol or contract address. Pass chain='all' for parallel multi-chain lookup. Costs $0.01 in USDC on Base.",
   {
     address: z.string().describe("0x EVM wallet address"),
@@ -127,11 +170,9 @@ server.tool(
   async (args) => asText(await paidGet("/api/balance", args)),
 );
 
-// ────────────────────────────────────────────────────────────────────────
-// 2. yield — opinionated DeFi yield recommendation ($0.05)
-// ────────────────────────────────────────────────────────────────────────
+// hyperd.yield.recommend — opinionated DeFi yield recommendation ($0.05)
 server.tool(
-  "hyperd_get_yield",
+  "hyperd.yield.recommend",
   "Get an opinionated DeFi yield recommendation. Filters DefiLlama's pool universe by risk tier (low/medium/high), TVL, and IL exposure, then ranks by APY. Returns the top picks plus projected $ yield over your duration. Costs $0.05 in USDC.",
   {
     amount: z.number().describe("USD amount to invest"),
@@ -152,11 +193,9 @@ server.tool(
     ),
 );
 
-// ────────────────────────────────────────────────────────────────────────
-// 3. token/info — aggregated token metadata ($0.01)
-// ────────────────────────────────────────────────────────────────────────
+// hyperd.token.info — aggregated token metadata ($0.01)
 server.tool(
-  "hyperd_get_token_info",
+  "hyperd.token.info",
   "Get aggregated token metadata: market cap, supply, contract addresses across chains, recent volume. One call replaces multiple CoinGecko / Etherscan / DefiLlama lookups. Costs $0.01 in USDC.",
   {
     query: z.string().optional().describe("Symbol, name, or coingecko id (e.g., 'USDC' or 'usd-coin')"),
@@ -166,11 +205,9 @@ server.tool(
   async (args) => asText(await paidGet("/api/token/info", args)),
 );
 
-// ────────────────────────────────────────────────────────────────────────
-// 4. token/security — security risk score ($0.05)
-// ────────────────────────────────────────────────────────────────────────
+// hyperd.token.security — security risk score ($0.05)
 server.tool(
-  "hyperd_check_token_security",
+  "hyperd.token.security",
   "Get a token's security risk score (0-100). Ensemble of GoPlus signals: honeypot detection, owner permissions, holder concentration, buy/sell taxes, source verification. Returns score, band (safe/caution/warning/danger), and structured findings. Costs $0.05 in USDC.",
   {
     contract: z.string().describe("Token contract address"),
@@ -179,11 +216,9 @@ server.tool(
   async (args) => asText(await paidGet("/api/token/security", args)),
 );
 
-// ────────────────────────────────────────────────────────────────────────
-// 5. risk/wallet — sanctions + heuristic wallet risk ($0.10)
-// ────────────────────────────────────────────────────────────────────────
+// hyperd.wallet.risk — sanctions + heuristic wallet risk ($0.10)
 server.tool(
-  "hyperd_check_wallet_risk",
+  "hyperd.wallet.risk",
   "Check a wallet's risk profile. Combines Chainalysis Sanctions Oracle (OFAC SDN authoritative) with GoPlus address heuristics (mixers, phishing, scams). Returns sanctioned flag + 0-100 heuristic score. Costs $0.10 in USDC.",
   {
     address: z.string().describe("0x EVM wallet address"),
@@ -193,11 +228,9 @@ server.tool(
   async (args) => asText(await paidGet("/api/risk/wallet", args)),
 );
 
-// ────────────────────────────────────────────────────────────────────────
-// 6. protocol/tvl — DefiLlama protocol health ($0.01)
-// ────────────────────────────────────────────────────────────────────────
+// hyperd.protocol.tvl — DefiLlama protocol health ($0.01)
 server.tool(
-  "hyperd_get_protocol_tvl",
+  "hyperd.protocol.tvl",
   "Get a DeFi protocol's TVL, audits, chain distribution from DefiLlama. Pass slug for detail (e.g., 'aave', 'morpho-blue') or list=true for top 50. Costs $0.01 in USDC.",
   {
     slug: z.string().optional().describe("Protocol slug, e.g., 'aave' or 'morpho-blue'"),
@@ -206,11 +239,9 @@ server.tool(
   async (args) => asText(await paidGet("/api/protocol/tvl", args)),
 );
 
-// ────────────────────────────────────────────────────────────────────────
-// 7. gas/estimate — gas oracle ($0.005)
-// ────────────────────────────────────────────────────────────────────────
+// hyperd.gas.estimate — gas oracle ($0.005)
 server.tool(
-  "hyperd_estimate_gas",
+  "hyperd.gas.estimate",
   "Get current gas price + base fee + tip percentiles for fast/standard/slow inclusion. Costs $0.005 in USDC.",
   {
     chain: z
@@ -221,11 +252,9 @@ server.tool(
   async (args) => asText(await paidGet("/api/gas/estimate", args)),
 );
 
-// ────────────────────────────────────────────────────────────────────────
-// 8. dex/quote — multi-aggregator best DEX route ($0.02)
-// ────────────────────────────────────────────────────────────────────────
+// hyperd.dex.quote — multi-aggregator best DEX route ($0.02)
 server.tool(
-  "hyperd_get_dex_quote",
+  "hyperd.dex.quote",
   "Get the best DEX swap route across multiple aggregators (Paraswap + 0x). Returns the highest output amount and per-source quotes. Costs $0.02 in USDC.",
   {
     from: z.string().describe("Source token symbol or contract address"),
@@ -238,11 +267,9 @@ server.tool(
   async (args) => asText(await paidGet("/api/dex/quote", args)),
 );
 
-// ────────────────────────────────────────────────────────────────────────
-// 9. wallet/persona — behavioral classification ($0.10)
-// ────────────────────────────────────────────────────────────────────────
+// hyperd.wallet.persona — behavioral classification ($0.10)
 server.tool(
-  "hyperd_classify_wallet",
+  "hyperd.wallet.persona",
   "Classify a wallet's persona based on on-chain behavior. Returns one of: Trader, HODLer, MEV-bot, Whale, Smart-Money, Airdrop-Farmer, Compromised, Inactive — plus confidence and supporting signals. Costs $0.10 in USDC.",
   {
     address: z.string().describe("0x EVM wallet address"),
@@ -254,11 +281,9 @@ server.tool(
   async (args) => asText(await paidGet("/api/wallet/persona", args)),
 );
 
-// ────────────────────────────────────────────────────────────────────────
-// 10. contract/audit — pre-trade contract security ($0.10)
-// ────────────────────────────────────────────────────────────────────────
+// hyperd.contract.audit — pre-trade contract security ($0.10)
 server.tool(
-  "hyperd_audit_contract",
+  "hyperd.contract.audit",
   "Pre-trade contract security audit. Composes GoPlus + Sourcify + DefiLlama protocol recognition + on-chain heuristics into a single 0-100 risk score with structured findings. Use BEFORE interacting with any unfamiliar contract. Costs $0.10 in USDC.",
   {
     contract: z.string().describe("Contract address to audit"),
@@ -270,11 +295,9 @@ server.tool(
   async (args) => asText(await paidGet("/api/contract/audit", args)),
 );
 
-// ────────────────────────────────────────────────────────────────────────
-// 11. governance/summarize — DAO proposal LLM summary ($0.10)
-// ────────────────────────────────────────────────────────────────────────
+// hyperd.governance.summarize — DAO proposal LLM summary ($0.10)
 server.tool(
-  "hyperd_summarize_governance",
+  "hyperd.governance.summarize",
   "Summarize a DAO governance proposal (Snapshot or Tally URL). Returns structured impact analysis: who benefits, who pays, recommended position. LLM-summarized. Costs $0.10 in USDC.",
   {
     proposal_url: z.string().describe("Snapshot or Tally proposal URL"),
@@ -282,11 +305,9 @@ server.tool(
   async (args) => asText(await paidGet("/api/governance/summarize", args)),
 );
 
-// ────────────────────────────────────────────────────────────────────────
-// 12. sentiment/token — Farcaster sentiment ($0.05)
-// ────────────────────────────────────────────────────────────────────────
+// hyperd.sentiment.token — Farcaster sentiment ($0.05)
 server.tool(
-  "hyperd_get_token_sentiment",
+  "hyperd.sentiment.token",
   "Get a token's sentiment score (0-100) from recent Farcaster discussion. Returns score, band (very_negative to very_positive), volume, trend, sample casts. Costs $0.05 in USDC.",
   {
     token: z.string().describe("Token symbol or name"),
@@ -305,7 +326,7 @@ async function main() {
     console.error(`hyperD MCP server running. Payer: ${payerAddress}. API: ${API_BASE}`);
   } else {
     console.error(
-      `hyperD MCP server running in INTROSPECTION mode (no wallet configured). Tool calls will error until you set HYPERD_WALLET_PRIVATE_KEY or HYPERD_WALLET_MNEMONIC in env.`,
+      `hyperD MCP server running (no wallet — only free tools available). Set HYPERD_WALLET_PRIVATE_KEY or HYPERD_WALLET_MNEMONIC to enable paid tools.`,
     );
   }
 }

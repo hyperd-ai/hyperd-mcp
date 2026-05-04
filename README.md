@@ -59,7 +59,7 @@ Restart Claude Desktop. The 12 hyperD tools appear in the conversation tool list
 
 Ask Claude in any conversation:
 
-> "What's the security score for USDC on Base? Use the hyperd_check_token_security tool."
+> "What's the security score for USDC on Base? Use the hyperd.token.security tool."
 
 Claude calls our endpoint, pays $0.05 from your wallet, returns the result. The whole flow takes ~2 seconds.
 
@@ -98,18 +98,18 @@ Then in your Claude Desktop config, point at the local file:
 
 | Tool | Price | What it does |
 |---|---|---|
-| `hyperd_get_balance` | $0.01 | Multi-chain ERC-20 + native balance lookup |
-| `hyperd_get_yield` | $0.05 | Opinionated DeFi yield recommendation |
-| `hyperd_get_token_info` | $0.01 | Aggregated token metadata (CoinGecko + DefiLlama) |
-| `hyperd_check_token_security` | $0.05 | GoPlus-backed security risk score |
-| `hyperd_check_wallet_risk` | $0.10 | Chainalysis sanctions + GoPlus heuristics |
-| `hyperd_get_protocol_tvl` | $0.01 | DefiLlama protocol health |
-| `hyperd_estimate_gas` | $0.005 | Gas oracle with tip percentiles |
-| `hyperd_get_dex_quote` | $0.02 | Multi-aggregator best DEX route |
-| `hyperd_classify_wallet` | $0.10 | Behavioral wallet classification |
-| `hyperd_audit_contract` | $0.10 | Pre-trade contract security composite |
-| `hyperd_summarize_governance` | $0.10 | LLM-summarized DAO proposals |
-| `hyperd_get_token_sentiment` | $0.05 | Token sentiment from Farcaster |
+| `hyperd.balance.get` | $0.01 | Multi-chain ERC-20 + native balance lookup |
+| `hyperd.yield.recommend` | $0.05 | Opinionated DeFi yield recommendation |
+| `hyperd.token.info` | $0.01 | Aggregated token metadata (CoinGecko + DefiLlama) |
+| `hyperd.token.security` | $0.05 | GoPlus-backed security risk score |
+| `hyperd.wallet.risk` | $0.10 | Chainalysis sanctions + GoPlus heuristics |
+| `hyperd.protocol.tvl` | $0.01 | DefiLlama protocol health |
+| `hyperd.gas.estimate` | $0.005 | Gas oracle with tip percentiles |
+| `hyperd.dex.quote` | $0.02 | Multi-aggregator best DEX route |
+| `hyperd.wallet.persona` | $0.10 | Behavioral wallet classification |
+| `hyperd.contract.audit` | $0.10 | Pre-trade contract security composite |
+| `hyperd.governance.summarize` | $0.10 | LLM-summarized DAO proposals |
+| `hyperd.sentiment.token` | $0.05 | Token sentiment from Farcaster |
 
 Full HTTP API docs: https://api.hyperd.ai/api/discover
 
