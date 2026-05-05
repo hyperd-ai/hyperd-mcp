@@ -81,38 +81,76 @@ async function paidGet(
   query: Record<string, string | number | boolean | undefined>,
 ): Promise<unknown> {
   if (!httpClient) {
-    throw new Error(
-      "Wallet not configured — this is a paid tool. Set HYPERD_WALLET_PRIVATE_KEY (raw 0x hex) " +
-        "OR HYPERD_WALLET_MNEMONIC (12/24 BIP-39 words) in this MCP server's env. Wallet must " +
-        "hold a few cents of USDC on Base. Free tools (hyperd.catalog.list, hyperd.pricing.get, " +
-        "hyperd.health.check) work without a wallet.",
-    );
+    throw new Error(WALLET_NOT_CONFIGURED_MSG);
   }
 
   const url = new URL(`${API_BASE}${path}`);
   for (const [k, v] of Object.entries(query)) {
     if (v !== undefined && v !== "" && v !== null) url.searchParams.set(k, String(v));
   }
+  return paidRequest("GET", url, undefined);
+}
 
-  const first = await fetch(url);
-  if (first.status === 200) return first.json();
+/**
+ * Same x402 dance as paidGet but for POST/DELETE bodies. Used by the
+ * bundle endpoint (POST with `calls`) and watch management (POST/DELETE).
+ */
+async function paidWithBody(
+  method: "POST" | "DELETE",
+  path: string,
+  body: unknown,
+  query: Record<string, string | number | boolean | undefined> = {},
+): Promise<unknown> {
+  if (!httpClient) {
+    throw new Error(WALLET_NOT_CONFIGURED_MSG);
+  }
+  const url = new URL(`${API_BASE}${path}`);
+  for (const [k, v] of Object.entries(query)) {
+    if (v !== undefined && v !== "" && v !== null) url.searchParams.set(k, String(v));
+  }
+  return paidRequest(method, url, body);
+}
+
+async function paidRequest(
+  method: "GET" | "POST" | "DELETE",
+  url: URL,
+  body: unknown,
+): Promise<unknown> {
+  const requestInit = (extraHeaders: Record<string, string> = {}): RequestInit => {
+    const headers: Record<string, string> = { ...extraHeaders };
+    let payload: string | undefined;
+    if (body !== undefined && method !== "GET") {
+      headers["Content-Type"] = "application/json";
+      payload = JSON.stringify(body);
+    }
+    return { method, headers, body: payload };
+  };
+
+  const first = await fetch(url, requestInit());
+  if (first.status === 200 || first.status === 201) return first.json();
   if (first.status !== 402) {
-    throw new Error(`HTTP ${first.status} on initial request: ${await first.text()}`);
+    throw new Error(`HTTP ${first.status} on initial ${method} request: ${await first.text()}`);
   }
 
-  const paymentRequired = httpClient.getPaymentRequiredResponse(
+  const paymentRequired = httpClient!.getPaymentRequiredResponse(
     (name) => first.headers.get(name),
     undefined,
   );
-  const paymentPayload = await httpClient.createPaymentPayload(paymentRequired);
-  const paymentHeaders = httpClient.encodePaymentSignatureHeader(paymentPayload);
+  const paymentPayload = await httpClient!.createPaymentPayload(paymentRequired);
+  const paymentHeaders = httpClient!.encodePaymentSignatureHeader(paymentPayload);
 
-  const second = await fetch(url, { headers: paymentHeaders });
+  const second = await fetch(url, requestInit(paymentHeaders));
   if (!second.ok) {
     throw new Error(`HTTP ${second.status} on payment retry: ${await second.text()}`);
   }
   return second.json();
 }
+
+const WALLET_NOT_CONFIGURED_MSG =
+  "Wallet not configured — this is a paid tool. Set HYPERD_WALLET_PRIVATE_KEY (raw 0x hex) " +
+  "OR HYPERD_WALLET_MNEMONIC (12/24 BIP-39 words) in this MCP server's env. Wallet must " +
+  "hold a few cents of USDC on Base. Free tools (hyperd.catalog.list, hyperd.pricing.get, " +
+  "hyperd.health.check) work without a wallet.";
 
 function asText(data: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
@@ -120,7 +158,7 @@ function asText(data: unknown) {
 
 const server = new McpServer({
   name: "hyperD x402 APIs",
-  version: "1.0.0",
+  version: "1.0.1",
 });
 
 // ════════════════════════════════════════════════════════════════════════
@@ -346,6 +384,107 @@ server.tool(
       .describe('Recent activity window. "24h", "7d", "30d", or bare integer days. Default "24h".'),
   },
   async (args) => asText(await paidGet("/api/wallet/anomaly", args)),
+);
+
+// hyperd.wallet.pnl — realized + unrealized P&L (FIFO/LIFO/HCFO) ($0.05)
+server.tool(
+  "hyperd.wallet.pnl",
+  "Realized + unrealized P&L for a wallet over a time window. ERC-20 + native, single chain per call. Three cost-basis methods: FIFO (default, IRS standard), LIFO (last-in-first-out), HCFO (highest-cost-first-out, tax-loss-harvesting view). Per-token breakdown with weighted-avg cost + mark-to-market. Unpriced trades and untracked-proceeds gaps surfaced honestly under coverage.* fields. v1.0 defers per-tx gas-fee USD attribution. Costs $0.05 in USDC.",
+  {
+    address: z.string().describe("0x EVM wallet address"),
+    chain: z
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"])
+      .optional()
+      .describe("Chain to compute P&L on. Default 'base'."),
+    from: z.number().int().optional().describe("Window start, unix seconds. Default = to - 30 days. Must be >= 1577836800 (2020-01-01)."),
+    to: z.number().int().optional().describe("Window end, unix seconds. Default = now. Cannot be > now+60."),
+    method: z.enum(["fifo", "lifo", "hcfo"]).optional().describe("Cost-basis method. Default 'fifo'."),
+  },
+  async (args) => asText(await paidGet("/api/wallet/pnl", args)),
+);
+
+// hyperd.budget.guardian — agent spend visibility ($0.01)
+server.tool(
+  "hyperd.budget.guardian",
+  "Agent spend visibility: aggregates recent outbound USDC transfers from a wallet over a configurable window (1h/24h/7d/30d). Returns total spend, by-destination breakdown, projected-24h rate, and an optional under_cap flag if cap_usd is provided. Use this BEFORE initiating the next paid x402 call to enforce a self-imposed budget. Bridged USDC.e variants are NOT counted. Costs $0.01 in USDC.",
+  {
+    address: z.string().describe("0x EVM wallet address"),
+    chain: z
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"])
+      .optional()
+      .describe("Chain to compute spend on. Default 'base'."),
+    window: z
+      .enum(["1h", "24h", "7d", "30d"])
+      .optional()
+      .describe("Lookback window. Default '24h'."),
+    cap_usd: z.number().positive().optional().describe("Optional self-imposed USDC cap. When provided, response includes under_cap, remainingUsd, and anyTxExceedsTenthOfCap."),
+  },
+  async (args) => asText(await paidGet("/api/budget/guardian", args)),
+);
+
+// hyperd.bundle — multi-call settlement ($0.20 fixed)
+server.tool(
+  "hyperd.bundle",
+  "Bundle multiple paid GET calls into one x402 settlement. Up to 10 sub-calls executed in parallel (concurrency cap 4), per-call results returned in a structured envelope. Fixed $0.20 USDC — typically cheaper than à la carte for any combination summing > $0.24 individually. Best-effort execution: failed sub-calls don't refund in v1.0 (credit ledger planned for v1.1). Use this when you need 3+ paid calls and want to save on facilitator round-trips.",
+  {
+    calls: z
+      .array(
+        z.object({
+          id: z.string().optional().describe("Caller-supplied id; echoed in result."),
+          method: z.literal("GET").describe("Only GET sub-calls supported in v1.0."),
+          path: z.string().describe("Endpoint path (e.g. /api/balance)."),
+          query: z.record(z.unknown()).optional().describe("Query params for the sub-call."),
+        }),
+      )
+      .min(1)
+      .max(10)
+      .describe("1-10 sub-calls. Each must target a bundleable paid GET endpoint."),
+  },
+  async (args) => asText(await paidWithBody("POST", "/api/bundle", args)),
+);
+
+// hyperd.watch.create — subscribe to a continuous watch ($3.00 prepaid)
+server.tool(
+  "hyperd.watch.create",
+  "Subscribe to a continuous watch on a wallet/position. Returns watch_id and webhook_secret (shown ONCE — store it; we cannot recover it). HMAC-SHA256 signed alerts POSTed to your webhook_url when threshold conditions are met. v1.0 supports liquidation watches across Aave V3 / Compound v3 / Spark / Morpho. $3.00 USDC prepays for duration_days (default 30, max 90).",
+  {
+    type: z.literal("liquidation").describe("Watch type. v1.0 only supports 'liquidation'."),
+    target_addresses: z
+      .array(z.string())
+      .min(1)
+      .max(1)
+      .describe("Wallet to watch (length-1 in v1.0; multi-target reserved for v1.1 Pro tier)."),
+    target_chain: z
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"])
+      .optional()
+      .describe("Chain to watch. Default 'base'."),
+    webhook_url: z.string().describe("HTTPS endpoint to POST alerts to. Must be publicly reachable; private/loopback IPs rejected."),
+    fire_on_band_or_worse: z
+      .enum(["safe", "caution", "warning", "critical"])
+      .optional()
+      .describe("Fire when health-factor band reaches this severity OR worse. Default 'warning'."),
+    duration_days: z.number().int().min(1).max(90).optional().describe("Watch lifetime in days. Default 30, max 90."),
+  },
+  async (args) => asText(await paidWithBody("POST", "/api/watch/create", args)),
+);
+
+// hyperd.watch.list — list owner's active watches ($0.001 ops fee)
+server.tool(
+  "hyperd.watch.list",
+  "List the active watches owned by your wallet. $0.001 USDC ops fee — covers the x402 auth path that proves wallet ownership (without it, the server can't tell which wallet is asking). webhook_secret is NEVER returned — store it from the create response.",
+  {},
+  async () => asText(await paidGet("/api/watch/list", {})),
+);
+
+// hyperd.watch.cancel — cancel an active watch ($0.001 ops fee)
+server.tool(
+  "hyperd.watch.cancel",
+  "Cancel a watch you own. $0.001 USDC ops fee covers the x402 auth path. Returns 404 (not 403) if the watch_id doesn't exist OR if you're not the owner — no existence-leak side-channel.",
+  {
+    watch_id: z.string().describe("The watch_id returned from hyperd.watch.create."),
+  },
+  async (args) =>
+    asText(await paidWithBody("DELETE", "/api/watch/cancel", undefined, { watch_id: args.watch_id })),
 );
 
 // ────────────────────────────────────────────────────────────────────────
