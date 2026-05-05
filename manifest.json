@@ -2,9 +2,9 @@
   "manifest_version": "0.2",
   "name": "hyperd-mcp",
   "display_name": "hyperD x402 APIs",
-  "version": "0.9.0",
-  "description": "15 paid x402 endpoints + 3 free tools for AI agents — DeFi yield, wallet risk, contract audit, governance summaries, sentiment, liquidation alerts (4 lending protocols), wallet anomaly detection. 7 chains: Base, Ethereum, Polygon, Arbitrum, Optimism, Avalanche, BNB. Pay per call in USDC on Base.",
-  "long_description": "MCP server exposing the hyperD x402 paid API catalog (api.hyperd.ai) as MCP tools accessible from Claude Desktop, Cursor, Cline, and Zed. Each tool call signs an EIP-3009 USDC payment authorization with the user's wallet, settles on Base mainnet via Coinbase's CDP facilitator (~2 seconds), and returns the data. No accounts, no API keys, $0.005-$0.10 USDC per call.\n\nIncludes: balance lookup, DeFi yield recommendations (DefiLlama-backed), token security scoring (GoPlus), wallet risk + sanctions (Chainalysis Oracle), DEX quote aggregation (Paraswap + 0x), wallet behavioral classification, pre-trade contract audit, DAO proposal LLM summarization, Farcaster sentiment, and more.",
+  "version": "1.0.1",
+  "description": "23 x402 tools for AI agents — 16 paid HTTP endpoints + multi-call bundle settlement + watch subscription tier + 3 free meta tools. DeFi yield, wallet risk, contract audit, governance, sentiment, cross-protocol liquidation risk, wallet anomaly detection, P&L (FIFO/LIFO/HCFO), agent budget guardian. 7 chains: Base, Ethereum, Polygon, Arbitrum, Optimism, Avalanche, BNB. Pay per call in USDC on Base.",
+  "long_description": "MCP server exposing the hyperD x402 paid API catalog (api.hyperd.ai) as 23 MCP tools accessible from Claude Desktop, Cursor, Cline, and Zed. Each tool call signs an EIP-3009 USDC payment authorization with the user's wallet, settles on Base mainnet via Coinbase's CDP facilitator (~2 seconds), and returns the data. No accounts, no API keys, $0.001-$0.20 USDC per call.\n\nNEW IN v1.0:\n- hyperd.bundle ($0.20 fixed): 1-10 paid GETs in ONE x402 settlement, saves up to 33% vs à la carte.\n- hyperd.wallet.pnl ($0.05): realized + unrealized P&L over a window with three cost-basis methods.\n- hyperd.liquidation.risk ($0.10): cross-protocol health factor across Aave V3 / Compound v3 / Spark / Morpho.\n- hyperd.wallet.anomaly ($0.10): behavioral deviation vs the wallet's own 180-day baseline.\n- hyperd.budget.guardian ($0.01): agent USDC spend visibility + cap check.\n- Watch subscription tier (hyperd.watch.create at $3 prepay): HMAC-signed webhook alerts on liquidation thresholds.\n\nINCLUDES: balance lookup, DeFi yield recommendations (DefiLlama), token security scoring (GoPlus), wallet risk + sanctions (Chainalysis Oracle), DEX quote aggregation (Paraswap + 0x), wallet behavioral persona, pre-trade contract audit, DAO proposal LLM summarization, Farcaster sentiment, gas oracle, multi-chain balance.\n\nWORKING AGENT IN 30 LINES: examples/python/risk_sentinel.py — forkable Python demo bundling 4 risk signals in one $0.20 settlement.",
   "author": {
     "name": "the-thomas-code",
     "url": "https://api.hyperd.ai"
@@ -1089,13 +1089,168 @@
           }
         }
       }
+    },
+    {
+      "name": "hyperd.wallet.pnl",
+      "description": "Realized + unrealized P&L for a wallet over a time window. ERC-20 + native, single chain per call. Three cost-basis methods (FIFO default, LIFO, HCFO). Per-token breakdown with weighted-avg cost + mark-to-market. Unpriced trades and untracked-proceeds gaps surfaced honestly under coverage.* fields. Costs $0.05 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "string", "description": "0x EVM wallet address" },
+          "chain": {
+            "type": "string",
+            "enum": ["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"],
+            "description": "Chain to compute P&L on. Default 'base'."
+          },
+          "from": { "type": "integer", "description": "Window start, unix seconds. Default = to - 30 days. Min 1577836800." },
+          "to": { "type": "integer", "description": "Window end, unix seconds. Default = now. Cannot be > now+60." },
+          "method": { "type": "string", "enum": ["fifo", "lifo", "hcfo"], "description": "Cost-basis method. Default 'fifo'." }
+        },
+        "required": ["address"]
+      },
+      "annotations": {
+        "title": "Wallet P&L",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hyperd.budget.guardian",
+      "description": "Agent spend visibility: aggregates recent outbound USDC transfers from a wallet over a configurable window (1h/24h/7d/30d). Returns total spend, by-destination breakdown, projected-24h rate, and an optional under_cap flag if cap_usd is provided. Use BEFORE initiating the next paid x402 call to enforce a self-imposed budget. Bridged USDC.e variants are NOT counted. Costs $0.01 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "string", "description": "0x EVM wallet address" },
+          "chain": {
+            "type": "string",
+            "enum": ["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"],
+            "description": "Chain to compute spend on. Default 'base'."
+          },
+          "window": {
+            "type": "string",
+            "enum": ["1h", "24h", "7d", "30d"],
+            "description": "Lookback window. Default '24h'."
+          },
+          "cap_usd": { "type": "number", "description": "Optional self-imposed USDC cap. When provided, response includes under_cap, remainingUsd, and anyTxExceedsTenthOfCap." }
+        },
+        "required": ["address"]
+      },
+      "annotations": {
+        "title": "Budget Guardian",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hyperd.bundle",
+      "description": "Bundle multiple paid GET calls into one x402 settlement. Up to 10 sub-calls executed in parallel (concurrency cap 4), per-call results returned in a structured envelope. Fixed $0.20 USDC — typically cheaper than à la carte for any combination summing > $0.24 individually. Best-effort execution: failed sub-calls don't refund in v1.0 (credit ledger planned for v1.1). Use this when you need 3+ paid calls and want to save on facilitator round-trips.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "calls": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "description": "1-10 sub-calls. Each must target a bundleable paid GET endpoint.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "description": "Caller-supplied id; echoed in result." },
+                "method": { "type": "string", "enum": ["GET"], "description": "Only GET sub-calls supported in v1.0." },
+                "path": { "type": "string", "description": "Endpoint path (e.g. /api/balance)." },
+                "query": { "type": "object", "description": "Query params for the sub-call." }
+              },
+              "required": ["method", "path"]
+            }
+          }
+        },
+        "required": ["calls"]
+      },
+      "annotations": {
+        "title": "Bundle (multi-call settlement)",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hyperd.watch.create",
+      "description": "Subscribe to a continuous watch on a wallet/position. Returns watch_id and webhook_secret (shown ONCE — store it; we cannot recover it). HMAC-SHA256 signed alerts POSTed to your webhook_url when threshold conditions are met. v1.0 supports liquidation watches across Aave V3 / Compound v3 / Spark / Morpho. $3.00 USDC prepays for duration_days (default 30, max 90). Currently gated to Vercel Pro deployments — returns 503 on Hobby until the project upgrades.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["liquidation"], "description": "Watch type. v1.0 only supports 'liquidation'." },
+          "target_addresses": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": { "type": "string" },
+            "description": "Wallet to watch (length-1 in v1.0; multi-target reserved for v1.1 Pro tier)."
+          },
+          "target_chain": {
+            "type": "string",
+            "enum": ["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"],
+            "description": "Chain to watch. Default 'base'."
+          },
+          "webhook_url": { "type": "string", "description": "HTTPS endpoint to POST alerts to. Must be publicly reachable; private/loopback IPs rejected." },
+          "fire_on_band_or_worse": {
+            "type": "string",
+            "enum": ["safe", "caution", "warning", "critical"],
+            "description": "Fire when health-factor band reaches this severity OR worse. Default 'warning'."
+          },
+          "duration_days": { "type": "integer", "minimum": 1, "maximum": 90, "description": "Watch lifetime in days. Default 30, max 90." }
+        },
+        "required": ["type", "target_addresses", "webhook_url"]
+      },
+      "annotations": {
+        "title": "Create Watch (subscription)",
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hyperd.watch.list",
+      "description": "List the active watches owned by your wallet. $0.001 USDC ops fee — covers the x402 auth path that proves wallet ownership. webhook_secret is NEVER returned — store it from the create response.",
+      "inputSchema": { "type": "object", "properties": {} },
+      "annotations": {
+        "title": "List Watches",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hyperd.watch.cancel",
+      "description": "Cancel a watch you own. $0.001 USDC ops fee covers the x402 auth path. Returns 404 (not 403) if the watch_id doesn't exist OR if you're not the owner — no existence-leak side-channel.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "watch_id": { "type": "string", "description": "The watch_id returned from hyperd.watch.create." }
+        },
+        "required": ["watch_id"]
+      },
+      "annotations": {
+        "title": "Cancel Watch",
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
     }
   ],
   "user_config": {
     "wallet_private_key": {
       "type": "string",
       "title": "Wallet Private Key (hex, 0x-prefixed)",
-      "description": "Add a wallet to enable PAID tools (12 endpoints, $0.005-$0.10 USDC per call on Base). FREE tools (catalog, pricing, health) work without one. Use a HOT WALLET with limited funds — recommend $5-$20 USDC. The wallet's balance is the spending limit.",
+      "description": "Add a wallet to enable the 20 PAID tools ($0.001-$0.20 USDC per call on Base, plus an optional $3 prepay subscription for liquidation watches). The 3 FREE tools (catalog, pricing, health) work without one. Use a HOT WALLET with limited funds — recommend $5-$20 USDC. The wallet's balance is the spending limit.",
       "sensitive": true,
       "required": false
     },

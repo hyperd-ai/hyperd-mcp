@@ -1,0 +1,9 @@
+# Core demo deps — risk_sentinel.py only needs these two.
+requests>=2.31,<3
+eth-account>=0.13,<1
+
+# Optional — only required for agent_langchain.py.
+# langchain-core>=0.3
+# langgraph>=0.2
+# langchain-anthropic>=0.3   # if you use Anthropic
+# langchain-openai>=0.2      # if you use OpenAI

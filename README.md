@@ -1,10 +1,6 @@
 # hyperD MCP Server
 
-[![smithery badge](https://smithery.ai/badge/hyperd/hyperd-mcp)](https://smithery.ai/servers/hyperd/hyperd-mcp)
-[![npm version](https://img.shields.io/npm/v/hyperd-mcp.svg)](https://www.npmjs.com/package/hyperd-mcp)
-[![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-
-Exposes 12 paid x402 API endpoints from `api.hyperd.ai` as MCP tools — drop into Claude Desktop, Cursor, Cline, Zed, or any MCP-compatible client.
+Exposes 22 hyperD x402 API tools (15 paid endpoints + 4 watch + bundle + 3 free meta) from `api.hyperd.ai` — drop into Claude Desktop, Cursor, Cline, Zed, or any MCP-compatible client.
 
 ## What it does
 
@@ -53,7 +49,7 @@ Edit your Claude Desktop config (location: macOS `~/Library/Application Support/
 }
 ```
 
-Restart Claude Desktop. The 12 hyperD tools appear in the conversation tool list.
+Restart Claude Desktop. The 22 hyperD tools appear in the conversation tool list.
 
 ### Step 3 — Try it
 
@@ -69,7 +65,9 @@ Each MCP-compatible client has a similar config file. Same pattern: name the ser
 
 For the full MCP client list and per-client config docs see https://modelcontextprotocol.io/clients.
 
-## Local-development install (clone instead of npm)
+## Local-development install (without npm publish)
+
+If you want to run from source instead of `npx`:
 
 ```bash
 git clone https://github.com/hyperd-ai/hyperd-mcp.git
@@ -78,7 +76,7 @@ npm install
 npm run build
 ```
 
-Then in your Claude Desktop config, point at the local file:
+Then in your Claude Desktop config, point at the local build:
 
 ```json
 {
@@ -110,6 +108,14 @@ Then in your Claude Desktop config, point at the local file:
 | `hyperd.contract.audit` | $0.10 | Pre-trade contract security composite |
 | `hyperd.governance.summarize` | $0.10 | LLM-summarized DAO proposals |
 | `hyperd.sentiment.token` | $0.05 | Token sentiment from Farcaster |
+| `hyperd.liquidation.risk` | $0.10 | Cross-protocol liquidation risk (Aave V3 / Compound v3 / Spark / Morpho) |
+| `hyperd.wallet.anomaly` | $0.10 | Wallet anomaly detection vs 180-day baseline |
+| `hyperd.wallet.pnl` | $0.05 | Realized + unrealized P&L (FIFO/LIFO/HCFO) |
+| `hyperd.budget.guardian` | $0.01 | Agent USDC spend visibility + cap check |
+| `hyperd.bundle` | $0.20 fixed | Multi-call: 1-10 paid GETs in one settlement |
+| `hyperd.watch.create` | $3.00 prepay | Subscribe to a continuous liquidation watch (HMAC webhooks) |
+| `hyperd.watch.list` | (free for owner) | List your active watches |
+| `hyperd.watch.cancel` | (free for owner) | Cancel one of your watches |
 
 Full HTTP API docs: https://api.hyperd.ai/api/discover
 
@@ -138,4 +144,4 @@ Derives at the standard Ethereum path `m/44'/60'/0'/0/0`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — same as the parent repo.
