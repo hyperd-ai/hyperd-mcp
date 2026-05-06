@@ -1,7 +1,7 @@
 {
   "name": "hyperd-mcp",
-  "version": "1.0.1",
-  "description": "MCP server for hyperD x402 paid APIs — 22 tools spanning balance/yield/risk/governance/liquidation, plus v1.0's marquee additions: continuous watches with HMAC webhooks, wallet P&L (FIFO/LIFO/HCFO), agent budget guardian, multi-call bundle settlement. Accessible from Claude Desktop / Cursor / Cline / Zed via stdio. Pay per call in USDC on Base.",
+  "version": "1.0.2",
+  "description": "MCP server for hyperD x402 paid DeFi APIs \u2014 pay per call in USDC on Base, ~2s settlement, no API keys. 23 tools (16 paid endpoints + bundle settlement) across 7 EVM chains. Drops into Claude Desktop / Cursor / Cline / Zed via stdio.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -12,7 +12,10 @@
     "ai-agents",
     "defi",
     "base",
+    "ethereum",
     "usdc",
+    "stablecoins",
+    "crypto-payments",
     "paid-apis",
     "agent-tools"
   ],
