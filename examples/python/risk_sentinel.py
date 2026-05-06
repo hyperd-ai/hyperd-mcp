@@ -22,7 +22,18 @@ Run:
 
     pip install -r requirements.txt
     export HYPERD_WALLET_PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+
+    # Default: scan Vitalik on Base
+    python risk_sentinel.py
+
+    # Specify a target wallet (positional or --target):
     python risk_sentinel.py 0xWALLET_TO_ANALYZE
+
+    # Specify a chain (default: base):
+    python risk_sentinel.py --chain ethereum --target 0x81D0AC9a5f91188074fd753a03885162bec74246
+
+    # Specify the token whose security + sentiment to check (default: chain's wrapped native):
+    python risk_sentinel.py --chain ethereum --token-symbol USDC --token-contract 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
 
 Requires:
     - Python 3.10+
@@ -31,6 +42,7 @@ Requires:
 """
 from __future__ import annotations
 
+import argparse
 import base64
 import json
 import os
@@ -46,11 +58,31 @@ from eth_account.messages import encode_typed_data
 
 API_BASE = os.environ.get("HYPERD_API_BASE", "https://api.hyperd.ai")
 
-# Default target wallet for the demo. Pass another as argv[1].
+# Default target wallet for the demo.
 DEFAULT_TARGET = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"  # Vitalik
-# Token whose security + sentiment to check.
-TOKEN_CONTRACT = "0x4200000000000000000000000000000000000006"  # WETH on Base
-TOKEN_SYMBOL = "WETH"
+
+SUPPORTED_CHAINS = (
+    "base",
+    "ethereum",
+    "polygon",
+    "arbitrum",
+    "optimism",
+    "avalanche",
+    "bnb",
+)
+
+# Per-chain wrapped-native (or canonical) token used for the security + sentiment
+# sub-calls when the user doesn't override --token-contract / --token-symbol.
+# Chosen to match what's most representative of activity on each chain.
+DEFAULT_TOKEN_BY_CHAIN: dict[str, tuple[str, str]] = {
+    "base":      ("0x4200000000000000000000000000000000000006", "WETH"),
+    "ethereum":  ("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", "WETH"),
+    "polygon":   ("0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", "WMATIC"),
+    "arbitrum":  ("0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", "WETH"),
+    "optimism":  ("0x4200000000000000000000000000000000000006", "WETH"),
+    "avalanche": ("0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7", "WAVAX"),
+    "bnb":       ("0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", "WBNB"),
+}
 
 
 @dataclass
@@ -64,6 +96,16 @@ class PaymentRequirement:
     pay_to: str
     max_timeout_seconds: int
     extra: dict[str, Any]
+
+
+class HyperdDemoError(RuntimeError):
+    """Top-level error class for friendly user-facing failures.
+
+    Anything raised as HyperdDemoError gets caught by main() and shown
+    as a one-line message instead of a Python stack trace. Use this
+    over RuntimeError when the message is meant to be read by a non-Python
+    user trying out the demo.
+    """
 
 
 def parse_payment_required(
@@ -82,22 +124,41 @@ def parse_payment_required(
     """
     raw = headers.get("payment-required") or headers.get("PAYMENT-REQUIRED")
     if not raw:
-        raise RuntimeError("Server returned 402 but no PAYMENT-REQUIRED header.")
-    decoded = json.loads(base64.b64decode(raw).decode("utf-8"))
+        raise HyperdDemoError(
+            "Server returned 402 but no PAYMENT-REQUIRED header. "
+            "The API may be misconfigured — check /api/health."
+        )
+    try:
+        decoded = json.loads(base64.b64decode(raw).decode("utf-8"))
+    except (ValueError, json.JSONDecodeError) as err:
+        raise HyperdDemoError(
+            f"PAYMENT-REQUIRED header is not valid base64+JSON: {err}"
+        ) from err
     accepts = decoded.get("accepts") or []
+    if not accepts:
+        raise HyperdDemoError("PAYMENT-REQUIRED challenge has empty `accepts` list.")
     for opt in accepts:
         if opt.get("scheme") == "exact" and opt.get("network", "").startswith("eip155:"):
-            req = PaymentRequirement(
-                scheme=opt["scheme"],
-                network=opt["network"],
-                amount=str(opt["amount"]),
-                asset=opt["asset"],
-                pay_to=opt["payTo"],
-                max_timeout_seconds=int(opt.get("maxTimeoutSeconds", 300)),
-                extra=opt.get("extra") or {},
-            )
+            try:
+                req = PaymentRequirement(
+                    scheme=opt["scheme"],
+                    network=opt["network"],
+                    amount=str(opt["amount"]),
+                    asset=opt["asset"],
+                    pay_to=opt["payTo"],
+                    max_timeout_seconds=int(opt.get("maxTimeoutSeconds", 300)),
+                    extra=opt.get("extra") or {},
+                )
+            except (KeyError, ValueError, TypeError) as err:
+                raise HyperdDemoError(
+                    f"Malformed payment requirement in 402 challenge: missing/bad field — {err}"
+                ) from err
             return req, opt
-    raise RuntimeError(f"No supported payment option in 402: {accepts!r}")
+    raise HyperdDemoError(
+        f"No supported payment option in 402 challenge. "
+        f"This demo handles 'exact' scheme on eip155:* networks. "
+        f"Got: {[(a.get('scheme'), a.get('network')) for a in accepts]}"
+    )
 
 
 def sign_payment_authorization(
@@ -136,7 +197,7 @@ def sign_payment_authorization(
     name = req.extra.get("name")
     version = req.extra.get("version")
     if not name or not version:
-        raise RuntimeError(
+        raise HyperdDemoError(
             f"402 challenge missing required `extra.name` / `extra.version` "
             f"for EIP-712 domain (got extra={req.extra!r}). Server should "
             f"include these — see https://x402.org/specs."
@@ -223,7 +284,12 @@ def call_with_payment(
     headers = {"Content-Type": "application/json"} if body is not None else {}
     body_payload = json.dumps(body) if body is not None else None
 
-    first = requests.request(method, url, params=params, data=body_payload, headers=headers, timeout=30)
+    try:
+        first = requests.request(method, url, params=params, data=body_payload, headers=headers, timeout=30)
+    except requests.exceptions.ConnectionError as err:
+        raise RuntimeError(f"Could not connect to {API_BASE} — check network or API_BASE env var. ({err})") from err
+    except requests.exceptions.Timeout as err:
+        raise RuntimeError(f"Request to {API_BASE}{path} timed out after 30s. Try again or check API status.") from err
     if first.status_code in (200, 201):
         return first.status_code, first.json()
     if first.status_code != 402:
@@ -243,7 +309,12 @@ def call_with_payment(
     headers["PAYMENT-SIGNATURE"] = payment_header
     headers["X-Payment"] = payment_header
 
-    second = requests.request(method, url, params=params, data=body_payload, headers=headers, timeout=60)
+    try:
+        second = requests.request(method, url, params=params, data=body_payload, headers=headers, timeout=60)
+    except requests.exceptions.ConnectionError as err:
+        raise RuntimeError(f"Could not connect to {API_BASE} on payment retry — {err}") from err
+    except requests.exceptions.Timeout as err:
+        raise RuntimeError(f"Payment-retry request to {API_BASE}{path} timed out after 60s.") from err
     return second.status_code, _safe_json(second)
 
 
@@ -254,39 +325,85 @@ def _safe_json(r: requests.Response) -> Any:
         return {"error": r.text[:500]}
 
 
-def run_risk_sentinel(account: Account, target: str) -> dict[str, Any]:
-    """Run the marquee bundle: 4 risk signals in one x402 settlement."""
+def run_risk_sentinel(
+    account: Account,
+    target: str,
+    *,
+    chain: str = "base",
+    token_contract: str | None = None,
+    token_symbol: str | None = None,
+) -> dict[str, Any]:
+    """Run the marquee bundle: 4 risk signals in one x402 settlement.
+
+    Args:
+      target: 0x EVM wallet to analyze.
+      chain: which chain to scan (default base). For liquidation.risk
+             pass "all" to aggregate across all 7 supported chains.
+      token_contract / token_symbol: which held token to score for
+             security + Farcaster sentiment. Defaults to the chain's
+             wrapped native (WETH on base/eth/arb/op, WMATIC on
+             polygon, WAVAX on avalanche, WBNB on bnb).
+    """
+    if token_contract is None or token_symbol is None:
+        # liquidation.risk supports chain="all" but token.security needs
+        # a specific chain. Fall back to base when caller passed "all".
+        token_chain = chain if chain != "all" else "base"
+        default_contract, default_symbol = DEFAULT_TOKEN_BY_CHAIN[token_chain]
+        if token_contract is None:
+            token_contract = default_contract
+        if token_symbol is None:
+            token_symbol = default_symbol
+
+    # token.security needs a specific chain; sentiment.token is chain-
+    # independent (Farcaster sentiment is global).
+    sec_chain = chain if chain != "all" else "base"
+
     body = {
         "calls": [
             {
                 "id": "liquidation",
                 "method": "GET",
                 "path": "/api/liquidation/risk",
-                "query": {"address": target, "chain": "base"},
+                "query": {"address": target, "chain": chain},
             },
             {
                 "id": "anomaly",
                 "method": "GET",
                 "path": "/api/wallet/anomaly",
-                "query": {"address": target, "chain": "base", "window": "24h"},
+                # wallet.anomaly doesn't accept chain="all" — fall back.
+                "query": {
+                    "address": target,
+                    "chain": sec_chain,
+                    "window": "24h",
+                },
             },
             {
                 "id": "token-security",
                 "method": "GET",
                 "path": "/api/token/security",
-                "query": {"contract": TOKEN_CONTRACT, "chain": "base"},
+                "query": {"contract": token_contract, "chain": sec_chain},
             },
             {
                 "id": "sentiment",
                 "method": "GET",
                 "path": "/api/sentiment/token",
-                "query": {"token": TOKEN_SYMBOL, "window": "24h"},
+                "query": {"token": token_symbol, "window": "24h"},
             },
         ]
     }
     status, payload = call_with_payment(account, "POST", "/api/bundle", body=body)
     if status != 200:
-        raise RuntimeError(f"Bundle call failed: HTTP {status} — {payload}")
+        # 402 here means our payment retry didn't satisfy the facilitator
+        # (insufficient balance, signature mismatch, expired auth, etc.).
+        # Anything else is a server / config error.
+        err_msg = (payload or {}).get("error") if isinstance(payload, dict) else str(payload)
+        if status == 402:
+            raise HyperdDemoError(
+                f"Bundle call still 402 after payment — likely insufficient USDC "
+                f"balance, expired authorization, or wrong network. Verify wallet "
+                f"has ≥ $0.30 USDC on Base mainnet. (server msg: {err_msg})"
+            )
+        raise HyperdDemoError(f"Bundle call failed: HTTP {status} — {err_msg}")
     return payload
 
 
@@ -383,32 +500,128 @@ def _selftest() -> None:
     print(f"  header bytes: {len(encoded)} (base64-encoded payment payload)")
 
 
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse CLI flags. Backwards-compatible: a positional arg is still
+    accepted as the target wallet (for parity with v1.0 invocations)."""
+    p = argparse.ArgumentParser(
+        prog="risk_sentinel",
+        description="hyperd Risk Sentinel — bundle 4 risk tools in one x402 settlement.",
+    )
+    p.add_argument(
+        "target_positional",
+        nargs="?",
+        default=None,
+        help="0x EVM wallet to analyze (positional form; equivalent to --target).",
+    )
+    p.add_argument(
+        "--target",
+        default=None,
+        help="0x EVM wallet to analyze. Default: Vitalik (0xd8dA…6045).",
+    )
+    p.add_argument(
+        "--chain",
+        choices=list(SUPPORTED_CHAINS) + ["all"],
+        default="base",
+        help="Chain to scan. 'all' aggregates liquidation.risk across all "
+        "supported chains. Default: base.",
+    )
+    p.add_argument(
+        "--token-contract",
+        default=None,
+        help="Override the token whose security to score. Default: chain's "
+        "wrapped native (WETH on base/eth/arb/op, WMATIC on polygon, "
+        "WAVAX on avax, WBNB on bnb).",
+    )
+    p.add_argument(
+        "--token-symbol",
+        default=None,
+        help="Symbol used for sentiment.token lookup (chain-independent). "
+        "Default: matches --token-contract.",
+    )
+    p.add_argument(
+        "--selftest",
+        action="store_true",
+        help="Run offline shape-verification of the x402 envelope. No wallet, no network.",
+    )
+    return p.parse_args(argv)
+
+
 def main() -> None:
-    if "--selftest" in sys.argv[1:]:
+    try:
+        _main_inner()
+    except HyperdDemoError as err:
+        print(f"\nERROR: {err}\n", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nCancelled.", file=sys.stderr)
+        sys.exit(130)
+    except Exception as err:
+        # Catch-all so an unexpected failure doesn't dump a stack trace
+        # on a demo user's terminal. The error type is included so we
+        # can debug from a bug report without needing the full traceback.
+        print(
+            f"\nUnexpected error ({type(err).__name__}): {err}\n"
+            f"If this looks like a bug, please open an issue at "
+            f"https://github.com/hyperd-ai/hyperd-mcp/issues with the "
+            f"full command you ran.\n",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+def _main_inner() -> None:
+    args = _parse_args(sys.argv[1:])
+
+    if args.selftest:
         _selftest()
         return
 
     private_key = os.environ.get("HYPERD_WALLET_PRIVATE_KEY")
     if not private_key:
-        print(
+        raise HyperdDemoError(
             "Missing HYPERD_WALLET_PRIVATE_KEY env var. Set a Base-mainnet "
-            "private key (hex, 0x-prefixed) for a wallet with ≥ $0.30 USDC.",
-            file=sys.stderr,
+            "private key (hex, 0x-prefixed) for a wallet with ≥ $0.30 USDC."
         )
-        sys.exit(1)
 
-    account = Account.from_key(private_key)
-    target = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_TARGET
+    # Pre-validate length BEFORE handing to eth-account so the error is
+    # actionable instead of a deep stack trace from eth_keys validation.
+    pk_clean = private_key.removeprefix("0x").strip()
+    if len(pk_clean) != 64 or not all(c in "0123456789abcdefABCDEF" for c in pk_clean):
+        raise HyperdDemoError(
+            f"HYPERD_WALLET_PRIVATE_KEY has wrong length/format: got {len(pk_clean)} "
+            f"hex chars (expected 64). Common causes: paste truncation, accidental "
+            f"shell quoting, stale value in .zshrc / .env. Re-export with the full "
+            f"64-hex-char value (66 with 0x prefix)."
+        )
+
+    try:
+        account = Account.from_key(private_key)
+    except Exception as err:
+        raise HyperdDemoError(f"Could not parse HYPERD_WALLET_PRIVATE_KEY: {err}") from err
+    target = args.target or args.target_positional or DEFAULT_TARGET
+
+    # Resolve token defaults from chain map for the print banner.
+    token_chain = args.chain if args.chain != "all" else "base"
+    default_contract, default_symbol = DEFAULT_TOKEN_BY_CHAIN[token_chain]
+    token_contract = args.token_contract or default_contract
+    token_symbol = args.token_symbol or default_symbol
 
     print("hyperd Risk Sentinel demo")
     print(f"  payer  : {account.address}")
     print(f"  target : {target}")
-    print(f"  token  : {TOKEN_SYMBOL} ({TOKEN_CONTRACT})")
+    print(f"  chain  : {args.chain}")
+    print(f"  token  : {token_symbol} ({token_contract})")
     print(f"  API    : {API_BASE}")
     print()
 
     start = time.time()
-    payload = run_risk_sentinel(account, target)
+    payload = run_risk_sentinel(
+        account,
+        target,
+        chain=args.chain,
+        token_contract=token_contract,
+        token_symbol=token_symbol,
+    )
     elapsed_ms = int((time.time() - start) * 1000)
 
     print(f"Settled in {elapsed_ms}ms")

@@ -72,6 +72,43 @@ Pass another wallet to analyze:
 python risk_sentinel.py 0xANOTHER_WALLET_ADDRESS
 ```
 
+### Multi-chain demo flags
+
+By default the demo scans Base. Use `--chain` to point at a different chain
+and `--target`/positional to specify the wallet:
+
+```bash
+# Big stETH leverage looper on Ethereum (~$200M USDT debt, healthy)
+python risk_sentinel.py \
+  --chain ethereum \
+  --target 0x81D0AC9a5f91188074fd753a03885162bec74246
+
+# Cross-chain liquidation aggregate (chain="all" only valid for liquidation.risk;
+# wallet.anomaly + token.security fall back to base for that path)
+python risk_sentinel.py --chain all --target 0xYOUR_TARGET
+
+# Override the token used for security + sentiment sub-calls
+python risk_sentinel.py \
+  --chain ethereum \
+  --target 0xYOUR_TARGET \
+  --token-symbol USDC \
+  --token-contract 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+```
+
+When `--token-contract`/`--token-symbol` aren't passed, the demo defaults to
+the chain's wrapped native (WETH on base/eth/arb/op, WMATIC on polygon,
+WAVAX on avalanche, WBNB on bnb) — matches what most wallets actually hold.
+
+### Offline shape check (no wallet needed)
+
+```bash
+python risk_sentinel.py --selftest
+```
+
+Verifies the x402 envelope, signature length, nonce shape, and base64
+round-trip without making a network request. Use this to confirm a fork
+hasn't drifted from the v2 protocol shape.
+
 ### LangChain agent
 
 ```bash

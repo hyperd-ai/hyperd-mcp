@@ -103,20 +103,47 @@ def make_risk_tool(account: Account):
 
 
 def main() -> None:
-    private_key = os.environ.get("HYPERD_WALLET_PRIVATE_KEY")
-    if not private_key:
+    try:
+        _main_inner()
+    except KeyboardInterrupt:
+        print("\nCancelled.", file=sys.stderr)
+        sys.exit(130)
+    except ImportError as err:
+        # Most common: user installed the demo deps but skipped the
+        # langchain optionals.
         print(
-            "Missing HYPERD_WALLET_PRIVATE_KEY env var. See risk_sentinel.py.",
+            f"\nERROR: missing LangChain dependency — {err}\n"
+            f"Install with: pip install langchain-core langgraph "
+            f"langchain-anthropic   # or langchain-openai\n",
             file=sys.stderr,
         )
+        sys.exit(1)
+    except Exception as err:
+        # Reuse risk_sentinel.HyperdDemoError if raised — its message is
+        # already user-friendly. Anything else falls through to a tight
+        # one-liner instead of a full stack trace.
+        print(f"\nERROR: {err}\n", file=sys.stderr)
         sys.exit(1)
 
-    if not os.environ.get("ANTHROPIC_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
-        print(
-            "Missing ANTHROPIC_API_KEY or OPENAI_API_KEY. The agent needs an LLM.",
-            file=sys.stderr,
+
+def _main_inner() -> None:
+    private_key = os.environ.get("HYPERD_WALLET_PRIVATE_KEY")
+    if not private_key:
+        raise RuntimeError(
+            "Missing HYPERD_WALLET_PRIVATE_KEY env var. See risk_sentinel.py."
         )
-        sys.exit(1)
+
+    if not os.environ.get("ANTHROPIC_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
+        raise RuntimeError(
+            "Missing ANTHROPIC_API_KEY or OPENAI_API_KEY. The agent needs an LLM."
+        )
+
+    pk_clean = private_key.removeprefix("0x").strip()
+    if len(pk_clean) != 64 or not all(c in "0123456789abcdefABCDEF" for c in pk_clean):
+        raise RuntimeError(
+            f"HYPERD_WALLET_PRIVATE_KEY has wrong length/format: got {len(pk_clean)} "
+            f"hex chars (expected 64). See risk_sentinel.py error doc."
+        )
 
     account = Account.from_key(private_key)
     risk_tool = make_risk_tool(account)
