@@ -1,4 +1,4 @@
-# hyperd — Python examples
+# hyperD — Python examples
 
 Two runnable scripts that show the v1.0 marquee feature (`/api/bundle`)
 from Python. Both are intentionally self-contained — no `pip install
@@ -12,7 +12,7 @@ the file to read.
 
 | File | Lines | What it does |
 |---|---:|---|
-| [`risk_sentinel.py`](risk_sentinel.py) | ~200 | Standalone demo: bundles 4 paid hyperd tools in one `/api/bundle` call. Implements EIP-3009 signing inline. |
+| [`risk_sentinel.py`](risk_sentinel.py) | ~200 | Standalone demo: bundles 4 paid hyperD tools in one `/api/bundle` call. Implements EIP-3009 signing inline. |
 | [`agent_langchain.py`](agent_langchain.py) | ~100 | Wraps `risk_sentinel.run_risk_sentinel` as a LangChain `StructuredTool`, hands it to a Claude / GPT agent. |
 | [`requirements.txt`](requirements.txt) | — | `requests`, `eth-account`. LangChain deps commented out (uncomment for `agent_langchain.py`). |
 
@@ -48,7 +48,7 @@ python risk_sentinel.py
 Output (real, with a funded wallet):
 
 ```
-hyperd Risk Sentinel demo
+hyperd Risk Sentinel
   payer  : 0xYourPayerAddress
   target : 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
   token  : WETH (0x4200000000000000000000000000000000000006)
@@ -57,13 +57,13 @@ hyperd Risk Sentinel demo
 Settled in 4823ms
   bundle_id      : 0c2e1c8a-...
   paid           : $0.200 USDC
-  à la carte sum : $0.300 USDC
+  unbundled sum  : $0.300 USDC
   saved          : $0.100 (4/4 successful)
 
-  ✓ liquidation     band=safe score=18 debt=$12000
-  ✓ anomaly         band=normal score=12 anomalies=0
-  ✓ token-security  band=safe score=4
-  ✓ sentiment       band=neutral_positive score=58 trend=stable
+  ✓ liquidation      band=safe score=18 ltv=15% debt=$12000
+  ✓ anomaly          band=normal score=12 anomalies=0
+  ✓ token-security   band=safe score=4
+  ✓ sentiment        band=neutral_positive score=58 trend=stable
 ```
 
 Pass another wallet to analyze:

@@ -1,6 +1,6 @@
 # hyperD MCP Server
 
-Exposes 22 hyperD x402 API tools (15 paid endpoints + 4 watch + bundle + 3 free meta) from `api.hyperd.ai` — drop into Claude Desktop, Cursor, Cline, Zed, or any MCP-compatible client.
+Exposes 23 hyperD x402 API tools (16 paid endpoints + bundle + 3 watch + 3 free meta) from `api.hyperd.ai` — drop into Claude Desktop, Cursor, Cline, Zed, or any MCP-compatible client.
 
 ## What it does
 
@@ -49,7 +49,7 @@ Edit your Claude Desktop config (location: macOS `~/Library/Application Support/
 }
 ```
 
-Restart Claude Desktop. The 22 hyperD tools appear in the conversation tool list.
+Restart Claude Desktop. The 23 hyperD tools appear in the conversation tool list.
 
 ### Step 3 — Try it
 

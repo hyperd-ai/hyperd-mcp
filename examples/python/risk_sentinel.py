@@ -49,8 +49,16 @@ import os
 import secrets
 import sys
 import time
+import warnings
 from dataclasses import dataclass
 from typing import Any
+
+# Suppress urllib3's NotOpenSSLWarning, which fires on macOS system Python
+# builds linked against LibreSSL. It's cosmetic — urllib3 still works fine —
+# but it adds noise above the actual program output. Must run BEFORE
+# `import requests`, since requests transitively imports urllib3 and the
+# warning is emitted at that import.
+warnings.filterwarnings("ignore", message=r".*OpenSSL.*")
 
 import requests
 from eth_account import Account
@@ -416,10 +424,17 @@ def summarize(result: dict[str, Any]) -> str:
         return f"  ✗ {rid:<16} HTTP {status}  → error: {err}"
     body = result.get("body") or {}
     if rid == "liquidation":
+        debt = body.get("totalDebtUsd") or 0
+        collateral = body.get("totalCollateralUsd") or 0
+        # LTV = debt/collateral. Skip if no collateral (no position) — printing
+        # ltv=0% on a wallet with no Aave/Compound/Spark/Morpho positions would
+        # be misleading.
+        ltv_str = f"ltv={debt / collateral * 100:.0f}% " if collateral > 0 else ""
         return (
             f"  ✓ {rid:<16} band={body.get('compositeBand')} "
             f"score={body.get('compositeRiskScore')} "
-            f"debt=${body.get('totalDebtUsd', 0):.0f}"
+            f"{ltv_str}"
+            f"debt=${debt:.0f}"
         )
     if rid == "anomaly":
         return (
@@ -430,11 +445,18 @@ def summarize(result: dict[str, Any]) -> str:
     if rid == "token-security":
         return f"  ✓ {rid:<16} band={body.get('band')} score={body.get('score')}"
     if rid == "sentiment":
-        return (
-            f"  ✓ {rid:<16} band={body.get('band')} "
-            f"score={body.get('sentimentScore')} "
-            f"trend={body.get('trend')}"
-        )
+        # `trend=unknown` is the empty-Farcaster-data fallback (sentiment.ts
+        # line ~110). Hide it rather than print "unknown" — printing it reads
+        # like a bug, and renaming it to "neutral" would conflate "no data"
+        # with "balanced data" (different meanings, different trustworthiness).
+        parts = [
+            f"band={body.get('band')}",
+            f"score={body.get('sentimentScore')}",
+        ]
+        trend = body.get("trend")
+        if trend and trend != "unknown":
+            parts.append(f"trend={trend}")
+        return f"  ✓ {rid:<16} " + " ".join(parts)
     return f"  ✓ {rid:<16} {json.dumps(body)[:80]}"
 
 
@@ -606,7 +628,7 @@ def _main_inner() -> None:
     token_contract = args.token_contract or default_contract
     token_symbol = args.token_symbol or default_symbol
 
-    print("hyperd Risk Sentinel demo")
+    print("hyperd Risk Sentinel")
     print(f"  payer  : {account.address}")
     print(f"  target : {target}")
     print(f"  chain  : {args.chain}")
@@ -627,7 +649,7 @@ def _main_inner() -> None:
     print(f"Settled in {elapsed_ms}ms")
     print(f"  bundle_id      : {payload.get('bundle_id')}")
     print(f"  paid           : ${payload.get('bundle_price_usd', 0):.3f} USDC")
-    print(f"  à la carte sum : ${payload.get('sum_unit_prices_usd', 0):.3f} USDC")
+    print(f"  unbundled sum  : ${payload.get('sum_unit_prices_usd', 0):.3f} USDC")
     print(
         f"  saved          : ${payload.get('savings_usd', 0):.3f} "
         f"({payload.get('success_count')}/{len(payload.get('results') or [])} successful)"
