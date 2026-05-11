@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.hyperd-ai/hyperd-mcp",
-  "description": "MCP server for hyperD — 20 paid DeFi endpoints (wallet risk, token security, cross-protocol liquidation health across Aave V3 / Compound v3 / Spark / Morpho, P&L, DEX quote aggregation, governance LLM summaries, sentiment, anomaly, audit, multi-call bundle). Pay-per-call in USDC on Base via x402 — no API key, no signup. The signed EIP-3009 payment is the auth, settles in ~2 seconds via Coinbase facilitator.",
+  "description": "Pre-trade DeFi intelligence for AI agents. 20 paid x402 endpoints, USDC on Base.",
   "repository": {
     "url": "https://github.com/hyperd-ai/hyperd-mcp",
     "source": "github"
