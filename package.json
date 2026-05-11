@@ -1,6 +1,7 @@
 {
   "name": "hyperd-mcp",
-  "version": "1.0.2",
+  "mcpName": "io.github.hyperd-ai/hyperd-mcp",
+  "version": "1.0.3",
   "description": "MCP server for hyperD x402 paid DeFi APIs \u2014 pay per call in USDC on Base, ~2s settlement, no API keys. 23 tools (16 paid endpoints + bundle settlement) across 7 EVM chains. Drops into Claude Desktop / Cursor / Cline / Zed via stdio.",
   "keywords": [
     "mcp",

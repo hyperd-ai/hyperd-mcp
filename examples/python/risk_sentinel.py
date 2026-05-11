@@ -118,17 +118,28 @@ class HyperdDemoError(RuntimeError):
 
 def parse_payment_required(
     headers: dict[str, str],
-) -> tuple[PaymentRequirement, dict[str, Any]]:
+) -> tuple[PaymentRequirement, dict[str, Any], Any, Any]:
     """Decode the PAYMENT-REQUIRED header from a 402 response.
 
     The server base64-encodes a JSON envelope; the `accepts` array lists
     one or more schemes the server will settle. We pick the first
     `exact` scheme on an `eip155:*` network (USDC on EVM).
 
-    Returns the parsed dataclass for ergonomic access AND the raw dict
-    of the chosen requirement — the v2 X-Payment payload echoes the
-    full requirement back to the server in an `accepted` field, which
-    the server uses for `deepEqual` matching against its own list.
+    Returns four things:
+    - PaymentRequirement dataclass — ergonomic accessors for the chosen accepts entry
+    - raw requirement dict — echoed verbatim into the v2 payload's `accepted` field
+      (server uses deepEqual against its own list)
+    - top-level `resource` from the 402 challenge — must be echoed into the v2
+      payload's top-level `resource` field per x402 V2 Spec §5.2.
+    - top-level `extensions` from the 402 challenge — must ALSO be echoed into
+      the v2 payload's top-level `extensions` field. Without this, CDP's
+      facilitator never invokes its bazaar-extension handler at all, no
+      EXTENSION-RESPONSES header is emitted on /verify or /settle, and the
+      payTo never appears in /discovery/merchant. Confirmed empirically:
+      hyperD's payTo accumulated 30+ post-fix settlements with `resource`
+      echoed but `extensions` omitted; CDP returned ZERO EXTENSION-RESPONSES
+      headers across all of them. Adding the extensions echo is what flipped
+      bazaar processing on. (github.com/x402-foundation/x402 issue #2207.)
     """
     raw = headers.get("payment-required") or headers.get("PAYMENT-REQUIRED")
     if not raw:
@@ -145,6 +156,13 @@ def parse_payment_required(
     accepts = decoded.get("accepts") or []
     if not accepts:
         raise HyperdDemoError("PAYMENT-REQUIRED challenge has empty `accepts` list.")
+    # Top-level resource: object on v2 ({url, description?, mimeType?}) or string
+    # (URL only) on some legacy emitters. Echo whichever shape the server sent.
+    resource_obj = decoded.get("resource")
+    # Top-level extensions: { bazaar: { info, schema } } when the server is
+    # bazaar-discoverable. Echoing this is what triggers CDP's bazaar handler
+    # — see docstring above for the full diagnostic context.
+    extensions = decoded.get("extensions")
     for opt in accepts:
         if opt.get("scheme") == "exact" and opt.get("network", "").startswith("eip155:"):
             try:
@@ -161,7 +179,7 @@ def parse_payment_required(
                 raise HyperdDemoError(
                     f"Malformed payment requirement in 402 challenge: missing/bad field — {err}"
                 ) from err
-            return req, opt
+            return req, opt, resource_obj, extensions
     raise HyperdDemoError(
         f"No supported payment option in 402 challenge. "
         f"This demo handles 'exact' scheme on eip155:* networks. "
@@ -173,6 +191,8 @@ def sign_payment_authorization(
     account: Account,
     req: PaymentRequirement,
     raw_requirement: dict[str, Any],
+    resource_obj: Any,
+    extensions: Any,
 ) -> dict[str, Any]:
     """Sign EIP-3009 transferWithAuthorization for the 402 challenge.
 
@@ -181,11 +201,18 @@ def sign_payment_authorization(
     submits on-chain. The signature commits to a specific
     (from, to, value, validAfter, validBefore, nonce) tuple.
 
-    Returns a v2 PaymentPayload envelope. The `accepted` field echoes
-    the chosen requirement back to the server — it deep-equals against
-    its own paymentRequirements list to match. Without `accepted`, the
-    server can't find a matching requirement and the second request
-    falls back into another 402.
+    Returns a v2 PaymentPayload envelope. Three server-side fields beyond
+    the signature itself:
+
+    - `accepted` echoes the chosen requirement back. Server `deepEqual`s
+      against its own list to match. Without it, second request 402s.
+    - `resource` echoes the 402 challenge's top-level `resource`. CDP's
+      Bazaar indexer uses this to tag the settlement to a listing.
+      (x402 V2 Spec §5.2.)
+    - `extensions` echoes the 402 challenge's top-level `extensions`
+      (typically `{bazaar: {info, schema}}`). Without this echo, CDP's
+      facilitator skips bazaar processing entirely — no EXTENSION-RESPONSES
+      header is emitted, and the payTo never surfaces in /discovery/merchant.
     """
     chain_id = int(req.network.split(":", 1)[1])  # "eip155:8453" → 8453
     # Reference clients use validAfter = now - 10min so a slight clock
@@ -249,8 +276,10 @@ def sign_payment_authorization(
     if not signature_hex.startswith("0x"):
         signature_hex = "0x" + signature_hex
 
-    return {
+    payload: dict[str, Any] = {
         "x402Version": 2,
+        "scheme": req.scheme,
+        "network": req.network,
         # Echo the full requirement we matched. Server uses deepEqual
         # against its paymentRequirements list — without this, no match
         # → second request also 402s.
@@ -267,6 +296,18 @@ def sign_payment_authorization(
             },
         },
     }
+    # Echo the top-level resource from the 402 challenge. Settlements work
+    # without this, but CDP's Bazaar indexer needs it to tag the settlement
+    # to a listing — see docstring above.
+    if resource_obj is not None:
+        payload["resource"] = resource_obj
+    # Echo the top-level extensions (typically {bazaar: {info, schema}}).
+    # Without this, CDP's facilitator never invokes bazaar processing — no
+    # EXTENSION-RESPONSES header, no /discovery/merchant entry. Confirmed
+    # empirically in #2207. See docstring above.
+    if extensions is not None:
+        payload["extensions"] = extensions
+    return payload
 
 
 def encode_payment_header(payment: dict[str, Any]) -> str:
@@ -305,10 +346,10 @@ def call_with_payment(
 
     # `requests.Response.headers` is already case-insensitive, but we
     # lowercase the dict to be defensive about middleware quirks.
-    requirement, raw_requirement = parse_payment_required(
+    requirement, raw_requirement, resource_obj, extensions = parse_payment_required(
         {k.lower(): v for k, v in first.headers.items()}
     )
-    payment = sign_payment_authorization(account, requirement, raw_requirement)
+    payment = sign_payment_authorization(account, requirement, raw_requirement, resource_obj, extensions)
     payment_header = encode_payment_header(payment)
     # `PAYMENT-SIGNATURE` is the v2 spec name. `@x402/express` also bridges
     # `x-payment` to it for compatibility, so either works against hyperd —
@@ -491,12 +532,25 @@ def _selftest() -> None:
         max_timeout_seconds=raw["maxTimeoutSeconds"],
         extra=raw["extra"],
     )
-    payment = sign_payment_authorization(account, req, raw)
+    test_resource = {
+        "url": "https://example.invalid/api/test",
+        "description": "Selftest resource — never reaches a real server.",
+        "mimeType": "application/json",
+    }
+    test_extensions = {
+        "bazaar": {
+            "info": {"input": {"type": "http", "method": "GET"}, "output": {"type": "json"}},
+            "schema": {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"},
+        },
+    }
+    payment = sign_payment_authorization(account, req, raw, test_resource, test_extensions)
     encoded = encode_payment_header(payment)
 
     # Envelope shape
     assert payment["x402Version"] == 2, "x402Version must be 2"
     assert payment["accepted"] == raw, "accepted must deep-equal the raw requirement"
+    assert payment["resource"] == test_resource, "resource must echo the 402 top-level resource (CDP Bazaar indexing requires it)"
+    assert payment["extensions"] == test_extensions, "extensions must echo the 402 top-level extensions (CDP bazaar handler requires it)"
 
     auth = payment["payload"]["authorization"]
     assert auth["from"] == account.address, "authorization.from mismatch"
