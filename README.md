@@ -154,6 +154,26 @@ Derives at the standard Ethereum path `m/44'/60'/0'/0/0`.
 - `HYPERD_API_BASE` — default `https://api.hyperd.ai`. Override for testnet or self-hosted.
 - `HYPERD_BASE_RPC` — default public Base RPC. Override for higher rate limits.
 
+## Remote MCP-over-HTTPS (no install)
+
+If you don't want to run the stdio server locally, hyperD's full tool catalog is also available as a remote MCP server:
+
+```
+POST https://api.hyperd.ai/mcp
+Content-Type: application/json
+
+{"jsonrpc":"2.0","id":1,"method":"tools/list"}
+```
+
+Same 17 tools, same free-tier quota (5 calls/IP/day, 25 lifetime), same `X-Payment` auth model for paid calls after quota. No `npm install`, no per-IDE config — just a URL.
+
+Useful when:
+- You're deploying an agent to a serverless platform (Vercel, Lambda) and don't want to bundle the stdio process
+- You're using an MCP-aware service that expects a remote URL (Smithery enterprise, hosted gateways)
+- You want to test the API surface from the command line with `curl` before committing to a local install
+
+Server card: [`https://api.hyperd.ai/.well-known/mcp.json`](https://api.hyperd.ai/.well-known/mcp.json).
+
 ## License
 
 MIT — same as the parent repo.
