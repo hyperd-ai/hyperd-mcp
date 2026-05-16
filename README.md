@@ -13,6 +13,18 @@ Each tool call:
 
 You pay **$0.005–$0.10 in USDC on Base** per call. No subscription. No accounts.
 
+## Try it free
+
+First 5 calls per IP per 24h are free — no wallet, no signup, no API key. Just curl:
+
+```bash
+curl "https://api.hyperd.ai/api/balance?address=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+```
+
+Lifetime cap: 25 calls per IP. After that (or when daily quota is exhausted), the endpoint returns HTTP 402 — sign a small EIP-3009 USDC payment on Base via the [Python SDK](https://pypi.org/project/hyperd-ai/) or [TypeScript MCP server](https://www.npmjs.com/package/hyperd-mcp).
+
+`/api/wallet/pnl` has a tighter free-tier cap of 1 call/IP/day (heavy upstream).
+
 ## What you need
 
 - A wallet with **at least $0.30 USDC on Base** (the seed cost for trying every tool once is ~$0.62)
