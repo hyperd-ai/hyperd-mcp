@@ -2,8 +2,8 @@
   "manifest_version": "0.2",
   "name": "hyperd-mcp",
   "display_name": "hyperD x402 APIs",
-  "version": "1.0.2",
-  "description": "23 x402 tools for AI agents \u2014 16 paid HTTP endpoints + multi-call bundle settlement + watch subscription tier + 3 free meta tools. DeFi yield, wallet risk, contract audit, governance, sentiment, cross-protocol liquidation risk, wallet anomaly detection, P&L (FIFO/LIFO/HCFO), agent budget guardian. 7 chains: Base, Ethereum, Polygon, Arbitrum, Optimism, Avalanche, BNB. Pay per call in USDC on Base.",
+  "version": "1.1.0",
+  "description": "29 x402 tools for AI agents \u2014 22 paid HTTP endpoints + bundle + 3 watches + 3 free meta + 6 synthesis verdicts (Haiku 4.5). DeFi yield, wallet risk, contract audit, governance, P&L, anomaly detection, and composed one-call verdicts. 7 chains. Pay per call in USDC on Base.",
   "long_description": "MCP server exposing the hyperD x402 paid API catalog (api.hyperd.ai) as 23 MCP tools accessible from Claude Desktop, Cursor, Cline, and Zed. Each tool call signs an EIP-3009 USDC payment authorization with the user's wallet, settles on Base mainnet via Coinbase's CDP facilitator (~2 seconds), and returns the data. No accounts, no API keys, $0.001-$0.20 USDC per call.\n\nNEW IN v1.0:\n- hyperd.bundle ($0.20 fixed): 1-10 paid GETs in ONE x402 settlement, saves up to 33% vs \u00e0 la carte.\n- hyperd.wallet.pnl ($0.05): realized + unrealized P&L over a window with three cost-basis methods.\n- hyperd.liquidation.risk ($0.10): cross-protocol health factor across Aave V3 / Compound v3 / Spark / Morpho.\n- hyperd.wallet.anomaly ($0.10): behavioral deviation vs the wallet's own 180-day baseline.\n- hyperd.budget.guardian ($0.01): agent USDC spend visibility + cap check.\n- Watch subscription tier (hyperd.watch.create at $3 prepay): HMAC-signed webhook alerts on liquidation thresholds.\n\nINCLUDES: balance lookup, DeFi yield recommendations (DefiLlama), token security scoring (GoPlus), wallet risk + sanctions (Chainalysis Oracle), DEX quote aggregation (Paraswap + 0x), wallet behavioral persona, pre-trade contract audit, DAO proposal LLM summarization, Farcaster sentiment, gas oracle, multi-chain balance.\n\nWORKING AGENT IN 30 LINES: examples/python/risk_sentinel.py \u2014 forkable Python demo bundling 4 risk signals in one $0.20 settlement.",
   "author": {
     "name": "the-thomas-code",
@@ -1350,6 +1350,161 @@
         "title": "Cancel Watch",
         "readOnlyHint": false,
         "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hyperd.risk.full_audit",
+      "description": "Composed wallet risk verdict. Fans out to balance, wallet_risk, wallet_persona, contract_audit, and privacy_mixer_risk then returns a Haiku 4.5-authored summary + confidence + band (safe / moderate / elevated / critical). One verdict replaces a manual 5-call audit walk. Costs $0.35 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "0x EVM wallet address"
+          },
+          "chain": {
+            "type": "string",
+            "enum": ["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"],
+            "description": "Chain. Default 'base'."
+          }
+        },
+        "required": ["address"]
+      },
+      "annotations": {
+        "title": "Full Risk Audit (synthesis)",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hyperd.token.archetype",
+      "description": "Composed token classification. Fans out to token_info, token_security, and protocol_tvl then returns a single archetype (stablecoin / blue_chip / mid_cap / memecoin / wrapped / governance / unverified) plus a plain-language verdict. Costs $0.30 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "contract": {
+            "type": "string",
+            "description": "Token contract address"
+          },
+          "chain": {
+            "type": "string",
+            "enum": ["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"],
+            "description": "Chain. Default 'base'."
+          }
+        },
+        "required": ["contract"]
+      },
+      "annotations": {
+        "title": "Token Archetype (synthesis)",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hyperd.wallet.thesis",
+      "description": "Composed wallet behavioral thesis. Fans out to balance, wallet_persona, wallet_pnl, and wallet_anomaly then returns a plain-language summary of the wallet's investing posture plus archetype (trader / hodler / yield_farmer / mev_bot / compromised / inactive). Costs $0.50 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "0x EVM wallet address"
+          },
+          "chain": {
+            "type": "string",
+            "enum": ["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"],
+            "description": "Chain. Default 'base'."
+          }
+        },
+        "required": ["address"]
+      },
+      "annotations": {
+        "title": "Wallet Behavioral Thesis (synthesis)",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hyperd.wallet.threat_brief",
+      "description": "Composed wallet threat brief. Fans out to wallet_risk, wallet_anomaly, privacy_mixer_risk, budget_guardian, and wallet_persona then returns a 2-3 sentence security verdict + band (clean / watch / elevated / critical). Replaces a manual 5-call security audit walk. Costs $1.50 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "0x EVM wallet address"
+          },
+          "chain": {
+            "type": "string",
+            "enum": ["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"],
+            "description": "Chain. Default 'base'."
+          }
+        },
+        "required": ["address"]
+      },
+      "annotations": {
+        "title": "Wallet Threat Brief (synthesis)",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hyperd.gov.translate",
+      "description": "Composed DAO governance translator. Takes a Snapshot or Tally proposal URL and returns a 2-3 sentence plain-language translation + domain band (economic_param / treasury / code_upgrade / governance_meta / social_signal). 1-year cache — proposals are immutable. Costs $1.00 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "proposal_url": {
+            "type": "string",
+            "description": "Snapshot or Tally proposal URL"
+          }
+        },
+        "required": ["proposal_url"]
+      },
+      "annotations": {
+        "title": "Governance Translator (synthesis)",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hyperd.yield.allocation",
+      "description": "Composed yield allocation recommender. Fans out 3 parallel yield calls at low/medium/high risk tiers then returns a recommended portfolio split + 2-sentence rationale. Bands: conservative / balanced / aggressive / bespoke. 6h cache. Costs $1.00 in USDC.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "USDC equivalent to allocate"
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Investment horizon in days. Default 30."
+          },
+          "chain": {
+            "type": "string",
+            "enum": ["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"],
+            "description": "Chain filter. Default 'base'."
+          }
+        },
+        "required": ["amount"]
+      },
+      "annotations": {
+        "title": "Yield Allocation (synthesis)",
+        "readOnlyHint": true,
+        "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": true
       }

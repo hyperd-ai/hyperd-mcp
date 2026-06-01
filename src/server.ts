@@ -487,6 +487,91 @@ server.tool(
     asText(await paidWithBody("DELETE", "/api/watch/cancel", undefined, { watch_id: args.watch_id })),
 );
 
+// ════════════════════════════════════════════════════════════════════════
+//            SYNTHESIS TIER — Haiku 4.5 composed verdicts (v0.7.0)
+// ════════════════════════════════════════════════════════════════════════
+
+// hyperd.risk.full_audit — composed wallet risk verdict ($0.35)
+server.tool(
+  "hyperd.risk.full_audit",
+  "Composed wallet risk verdict. Fans out to balance, wallet_risk, wallet_persona, contract_audit, and privacy_mixer_risk then returns a Haiku 4.5-authored summary + confidence + band (safe / moderate / elevated / critical). One verdict replaces a manual 5-call audit walk. Costs $0.35 in USDC.",
+  {
+    address: z.string().describe("0x EVM wallet address"),
+    chain: z
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"])
+      .optional()
+      .describe("Chain. Default 'base'."),
+  },
+  async (args) => asText(await paidGet("/api/risk/full_audit", args)),
+);
+
+// hyperd.token.archetype — composed token classification ($0.30)
+server.tool(
+  "hyperd.token.archetype",
+  "Composed token classification. Fans out to token_info, token_security, and protocol_tvl then returns a single archetype (stablecoin / blue_chip / mid_cap / memecoin / wrapped / governance / unverified) plus a plain-language verdict. Costs $0.30 in USDC.",
+  {
+    contract: z.string().describe("Token contract address"),
+    chain: z
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"])
+      .optional()
+      .describe("Chain. Default 'base'."),
+  },
+  async (args) => asText(await paidGet("/api/token/archetype", args)),
+);
+
+// hyperd.wallet.thesis — composed behavioral thesis ($0.50)
+server.tool(
+  "hyperd.wallet.thesis",
+  "Composed wallet behavioral thesis. Fans out to balance, wallet_persona, wallet_pnl, and wallet_anomaly then returns a plain-language summary of the wallet's investing posture plus archetype (trader / hodler / yield_farmer / mev_bot / compromised / inactive). Costs $0.50 in USDC.",
+  {
+    address: z.string().describe("0x EVM wallet address"),
+    chain: z
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"])
+      .optional()
+      .describe("Chain. Default 'base'."),
+  },
+  async (args) => asText(await paidGet("/api/wallet/thesis", args)),
+);
+
+// hyperd.wallet.threat_brief — composed security verdict ($1.50)
+server.tool(
+  "hyperd.wallet.threat_brief",
+  "Composed wallet threat brief. Fans out to wallet_risk, wallet_anomaly, privacy_mixer_risk, budget_guardian, and wallet_persona then returns a 2-3 sentence security verdict + band (clean / watch / elevated / critical). Replaces a manual 5-call security audit walk. Costs $1.50 in USDC.",
+  {
+    address: z.string().describe("0x EVM wallet address"),
+    chain: z
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"])
+      .optional()
+      .describe("Chain. Default 'base'."),
+  },
+  async (args) => asText(await paidGet("/api/wallet/threat_brief", args)),
+);
+
+// hyperd.gov.translate — DAO proposal plain-language translator ($1.00, 1y cache)
+server.tool(
+  "hyperd.gov.translate",
+  "Composed DAO governance translator. Takes a Snapshot or Tally proposal URL, fetches structured data via /api/governance/summarize, then produces a 2-3 sentence plain-language translation + domain band (economic_param / treasury / code_upgrade / governance_meta / social_signal). 1-year cache — proposals are immutable. Costs $1.00 in USDC.",
+  {
+    proposal_url: z.string().describe("Snapshot or Tally proposal URL"),
+  },
+  async (args) => asText(await paidGet("/api/gov/translate", args)),
+);
+
+// hyperd.yield.allocation — composed portfolio split recommender ($1.00, 6h cache)
+server.tool(
+  "hyperd.yield.allocation",
+  "Composed yield allocation recommender. Fans out 3 parallel /api/yield calls at low/medium/high risk tiers for the same amount + duration, then returns a recommended portfolio split + 2-sentence rationale. Bands: conservative / balanced / aggressive / bespoke. 6h cache bucketed by amount tier × duration × chain. Costs $1.00 in USDC.",
+  {
+    amount: z.number().describe("USDC equivalent to allocate"),
+    duration: z.number().int().optional().describe("Investment horizon in days. Default 30."),
+    chain: z
+      .enum(["base", "ethereum", "polygon", "arbitrum", "optimism", "avalanche", "bnb"])
+      .optional()
+      .describe("Chain filter. Default 'base'."),
+  },
+  async (args) => asText(await paidGet("/api/yield/allocation", args)),
+);
+
 // ────────────────────────────────────────────────────────────────────────
 // Boot
 // ────────────────────────────────────────────────────────────────────────

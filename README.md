@@ -1,6 +1,6 @@
 # hyperD MCP Server
 
-Exposes 23 hyperD x402 API tools (16 paid endpoints + bundle + 3 watch + 3 free meta) from `api.hyperd.ai` — drop into Claude Desktop, Cursor, Cline, Zed, or any MCP-compatible client.
+Exposes 29 hyperD x402 API tools (22 paid endpoints + bundle + 3 watch + 3 free meta + 6 synthesis verdicts) from `api.hyperd.ai` — drop into Claude Desktop, Cursor, Cline, Zed, or any MCP-compatible client.
 
 ## What it does
 
@@ -128,6 +128,19 @@ Then in your Claude Desktop config, point at the local build:
 | `hyperd.watch.create` | $3.00 prepay | Subscribe to a continuous liquidation watch (HMAC webhooks) |
 | `hyperd.watch.list` | (free for owner) | List your active watches |
 | `hyperd.watch.cancel` | (free for owner) | Cancel one of your watches |
+
+### Synthesis tier — composed verdicts (Haiku 4.5, v1.1.0)
+
+Each synthesis tool fans out multiple sub-calls internally and returns a single `verdict` + `inputs` + `methodology.version` + `coverage` envelope, authored by Claude Haiku 4.5.
+
+| Tool | Price | What it does |
+|---|---|---|
+| `hyperd.risk.full_audit` | $0.35 | Composed wallet risk: balance + sanctions + persona + contract + mixer. Bands: safe / moderate / elevated / critical. |
+| `hyperd.token.archetype` | $0.30 | Token classification: stablecoin / blue_chip / mid_cap / memecoin / wrapped / governance / unverified. |
+| `hyperd.wallet.thesis` | $0.50 | Plain-language behavioral thesis: trader / hodler / yield_farmer / mev_bot / compromised / inactive. |
+| `hyperd.wallet.threat_brief` | $1.50 | 2-3 sentence security verdict: clean / watch / elevated / critical. |
+| `hyperd.gov.translate` | $1.00 | Snapshot/Tally proposal in plain language (1y cache). |
+| `hyperd.yield.allocation` | $1.00 | Portfolio split across risk tiers for a given amount (6h cache). |
 
 Full HTTP API docs: https://api.hyperd.ai/api/discover
 
