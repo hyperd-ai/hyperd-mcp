@@ -1,6 +1,6 @@
 # hyperD MCP Server
 
-Exposes 29 hyperD x402 API tools (22 paid endpoints + bundle + 3 watch + 3 free meta + 6 synthesis verdicts) from `api.hyperd.ai` — drop into Claude Desktop, Cursor, Cline, Zed, or any MCP-compatible client.
+Exposes 24 paid hyperD x402 tools — 17 data/risk endpoints, **6 premium synthesis verdicts** ($0.30–$1.50), and a multi-call bundle — plus 3 free meta tools (and 3 watch tools when enabled) from `api.hyperd.ai`. Drop into Claude Desktop, Cursor, Cline, Zed, or any MCP-compatible client.
 
 ## What it does
 
@@ -11,7 +11,7 @@ Each tool call:
 4. Retries with the payment header
 5. Returns the data to the AI assistant
 
-You pay **$0.005–$0.10 in USDC on Base** per call. No subscription. No accounts.
+You pay **$0.005–$1.50 in USDC on Base** per call — data/risk endpoints $0.005–$0.10, premium synthesis verdicts $0.30–$1.50. No subscription. No accounts.
 
 ## Try it free
 
@@ -21,7 +21,7 @@ First 5 calls per IP per 24h are free — no wallet, no signup, no API key. Just
 curl "https://api.hyperd.ai/api/balance?address=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
 ```
 
-Lifetime cap: 25 calls per IP. After that (or when daily quota is exhausted), the endpoint returns HTTP 402 — sign a small EIP-3009 USDC payment on Base via the [Python SDK](https://pypi.org/project/hyperd-ai/) or [TypeScript MCP server](https://www.npmjs.com/package/hyperd-mcp).
+Lifetime cap: 10 calls per IP. After that (or when daily quota is exhausted), the endpoint returns HTTP 402 — sign a small EIP-3009 USDC payment on Base via the [Python SDK](https://pypi.org/project/hyperd-ai/) or [TypeScript MCP server](https://www.npmjs.com/package/hyperd-mcp). The premium synthesis tier ($0.30+) always requires payment — it is not free-tier eligible.
 
 `/api/wallet/pnl` has a tighter free-tier cap of 1 call/IP/day (heavy upstream).
 
@@ -61,7 +61,7 @@ Edit your Claude Desktop config (location: macOS `~/Library/Application Support/
 }
 ```
 
-Restart Claude Desktop. The 23 hyperD tools appear in the conversation tool list.
+Restart Claude Desktop. The hyperD tools appear in the conversation tool list.
 
 ### Step 3 — Try it
 
@@ -178,7 +178,7 @@ Content-Type: application/json
 {"jsonrpc":"2.0","id":1,"method":"tools/list"}
 ```
 
-Same 17 tools, same free-tier quota (5 calls/IP/day, 25 lifetime), same `X-Payment` auth model for paid calls after quota. No `npm install`, no per-IDE config — just a URL.
+Same 24 paid tools, same free-tier quota (5 calls/IP/day, 10 lifetime), same `X-Payment` auth model for paid calls after quota. No `npm install`, no per-IDE config — just a URL.
 
 Useful when:
 - You're deploying an agent to a serverless platform (Vercel, Lambda) and don't want to bundle the stdio process

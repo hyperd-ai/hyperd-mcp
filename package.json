@@ -1,8 +1,8 @@
 {
   "name": "hyperd-mcp",
   "mcpName": "io.github.hyperd-ai/hyperd-mcp",
-  "version": "1.1.0",
-  "description": "MCP server for hyperD x402 paid DeFi APIs \u2014 pay per call in USDC on Base, ~2s settlement, no API keys. 29 tools (22 paid endpoints + bundle + 3 watches + 3 free meta) across 7 EVM chains. Includes 6 synthesis tools (Haiku 4.5 composed verdicts). Drops into Claude Desktop / Cursor / Cline / Zed via stdio.",
+  "version": "1.1.1",
+  "description": "MCP server for hyperD x402 paid DeFi APIs \u2014 pay per call ($0.005\u2013$1.50 USDC on Base), ~2s settlement, no API keys. 24 paid tools across 7 EVM chains, including 6 premium synthesis verdicts (Haiku 4.5 composed: risk audit, token archetype, wallet thesis, threat brief, gov translate, yield allocation). Drops into Claude Desktop / Cursor / Cline / Zed via stdio.",
   "keywords": [
     "mcp",
     "model-context-protocol",
